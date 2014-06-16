@@ -646,7 +646,8 @@ mf_sync(mfp, flags)
 # endif
 	    /* OpenNT is strictly POSIX (Benzinger) */
 	    /* Tandem/Himalaya NSK-OSS doesn't have sync() */
-# if defined(__OPENNT) || defined(__TANDEM)
+	    /* TODO(sbc): remove once nacl_io provides sync() */
+# if defined(__OPENNT) || defined(__TANDEM) || defined(__native_client__)
 	    fflush(NULL);
 # else
 	    sync();

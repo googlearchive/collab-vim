@@ -160,7 +160,11 @@ _cdecl
 #  endif
 VimMain
 # else
+#  if defined(__native_client__)
+nacl_vim_main
+#  else
 main
+#  endif
 # endif
 (argc, argv)
     int		argc;

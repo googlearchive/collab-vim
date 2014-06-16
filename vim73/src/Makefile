@@ -1508,6 +1508,7 @@ OBJ = \
 	objects/if_cscope.o \
 	objects/if_xcmdsrv.o \
 	objects/main.o \
+	objects/vim_pepper.o \
 	objects/mark.o \
 	objects/memfile.o \
 	objects/memline.o \
@@ -1698,7 +1699,7 @@ $(VIMTARGET): auto/config.mk objects $(OBJ) version.c version.h
 		MAKE="$(MAKE)" sh $(srcdir)/link.sh
 
 xxd/xxd$(EXEEXT): xxd/xxd.c
-	cd xxd; CC="$(CC)" CFLAGS="$(CPPFLAGS) $(CFLAGS)" \
+	cd xxd; CC="$(CC)" EXEEXT="$(EXEEXT)" CFLAGS="$(CPPFLAGS) $(CFLAGS)" \
 		$(MAKE) -f Makefile
 
 # Build the language specific files if they were unpacked.
@@ -2545,6 +2546,9 @@ objects/integration.o: integration.c
 
 objects/main.o: main.c
 	$(CCC) -o $@ main.c
+
+objects/vim_pepper.o: vim_pepper.c
+	$(CCC) -o $@ vim_pepper.c
 
 objects/mark.o: mark.c
 	$(CCC) -o $@ mark.c
