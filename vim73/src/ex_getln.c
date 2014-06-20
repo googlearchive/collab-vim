@@ -892,8 +892,9 @@ getcmdline(firstc, count, indent)
 	 */
 	switch (c)
 	{
+
         case K_COLLABEDIT:
-            process_collabedits();
+            collab_applyedits();
             goto cmdline_not_changed;
 
 	case K_BS:

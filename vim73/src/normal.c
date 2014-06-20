@@ -9422,7 +9422,7 @@ nv_cursorhold(cap)
 nv_collabedit(cap)
     cmdarg_T	*cap;
 {
-    process_collabedits();
+    collab_applyedits();
     cap->retval |= CA_COMMAND_BUSY; /* don't call edit() now */
 }
 

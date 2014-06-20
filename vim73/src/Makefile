@@ -2849,6 +2849,9 @@ objects/option.o: option.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h 
 objects/os_unix.o: os_unix.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
   ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h os_unixx.h
+objects/pathdef.o: auto/pathdef.c vim.h auto/config.h feature.h os_unix.h \
+  auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
+  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/popupmnu.o: popupmnu.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
   collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h

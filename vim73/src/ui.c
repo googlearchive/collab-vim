@@ -119,7 +119,7 @@ ui_inchar(buf, maxlen, wtime, tb_change_cnt)
 {
     int		retval = 0;
 
-    pending_collabedits();
+    collab_bufcheck();
 
 #if defined(FEAT_GUI) && (defined(UNIX) || defined(VMS))
     /*

@@ -1142,7 +1142,7 @@ doESCkey:
 #endif
 
         case K_COLLABEDIT:
-            process_collabedits();
+            collab_applyedits();
             break;
 
 #ifdef FEAT_GUI_W32
