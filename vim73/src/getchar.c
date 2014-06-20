@@ -3057,6 +3057,7 @@ fix_input_buffer(buf, len, script)
 #ifdef FEAT_AUTOCMD
 		    /* timeout may generate K_CURSORHOLD */
 		    && (i < 2 || p[1] != KS_EXTRA || p[2] != (int)KE_CURSORHOLD)
+// TODO(zpotter): Determine if K_COLLABEDIT needs a check here...
 #endif
 #if defined(WIN3264) && !defined(FEAT_GUI)
 		    /* Win32 console passes modifiers */

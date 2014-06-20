@@ -1141,6 +1141,10 @@ doESCkey:
 	    break;
 #endif
 
+        case K_COLLABEDIT:
+            process_collabedits();
+            break;
+
 #ifdef FEAT_GUI_W32
 	    /* On Win32 ignore <M-F4>, we get it when closing the window was
 	     * cancelled. */

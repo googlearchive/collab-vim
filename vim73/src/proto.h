@@ -74,6 +74,7 @@ extern int _stricoll __ARGS((char *a, char *b));
 # endif
 # include "buffer.pro"
 # include "charset.pro"
+# include "collaborate.pro"
 # ifdef FEAT_CSCOPE
 #  include "if_cscope.pro"
 # endif

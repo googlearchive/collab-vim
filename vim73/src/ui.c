@@ -119,6 +119,8 @@ ui_inchar(buf, maxlen, wtime, tb_change_cnt)
 {
     int		retval = 0;
 
+    pending_collabedits();
+
 #if defined(FEAT_GUI) && (defined(UNIX) || defined(VMS))
     /*
      * Use the typeahead if there is any.

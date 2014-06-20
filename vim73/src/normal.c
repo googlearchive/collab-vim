@@ -182,6 +182,7 @@ static void	nv_drop __ARGS((cmdarg_T *cap));
 #ifdef FEAT_AUTOCMD
 static void	nv_cursorhold __ARGS((cmdarg_T *cap));
 #endif
+static void	nv_collabedit __ARGS((cmdarg_T *cap));
 
 static char *e_noident = N_("E349: No identifier under cursor");
 
@@ -450,6 +451,7 @@ static const struct nv_cmd
 #ifdef FEAT_AUTOCMD
     {K_CURSORHOLD, nv_cursorhold, NV_KEEPREG,		0},
 #endif
+    {K_COLLABEDIT, nv_collabedit, NV_KEEPREG,		0},
 };
 
 /* Number of commands in nv_cmds[]. */
@@ -3866,6 +3868,7 @@ add_to_showcmd(c)
 	K_MOUSEDOWN, K_MOUSEUP, K_MOUSELEFT, K_MOUSERIGHT,
 	K_X1MOUSE, K_X1DRAG, K_X1RELEASE, K_X2MOUSE, K_X2DRAG, K_X2RELEASE,
 	K_CURSORHOLD,
+        K_COLLABEDIT,
 	0
     };
 #endif
@@ -9411,3 +9414,15 @@ nv_cursorhold(cap)
     cap->retval |= CA_COMMAND_BUSY;	/* don't call edit() now */
 }
 #endif
+
+/*
+ * Trigger the processing of any pending collaborative edits
+ */
+    static void
+nv_collabedit(cap)
+    cmdarg_T	*cap;
+{
+    process_collabedits();
+    cap->retval |= CA_COMMAND_BUSY; /* don't call edit() now */
+}
+

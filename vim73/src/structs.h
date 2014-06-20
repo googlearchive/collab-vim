@@ -10,6 +10,8 @@
  * This file contains various definitions of structures that are used by Vim
  */
 
+#include "collaborate.h"
+
 /*
  * There is something wrong in the SAS compiler that makes typedefs not
  * valid in include files.  Has been fixed in version 6.58.

@@ -51,6 +51,7 @@ echo "CXXFLAGS=$CXXFLAGS"
 echo "LDFLAGS=$LDFLAGS"
 
 cd src && ./configure ${EXTRA_CONFIGURE_ARGS} 
+make depend
 cd ..
 
 # Compile to vim73/src/publish/vim/
