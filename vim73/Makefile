@@ -29,7 +29,7 @@ first:
 
 # Some make programs use the last target for the $@ default; put the other
 # targets separately to always let $@ expand to "first" by default.
-all install uninstall tools config configure reconfig proto depend lint tags types test testclean clean distclean:
+all install uninstall tools config configure reconfig proto depend lint tags types test testclean clean distclean testcollab:
 	@echo "Starting make in the src directory."
 	@echo "If there are problems, cd to the src directory and run make there"
 	cd src && $(MAKE) $@

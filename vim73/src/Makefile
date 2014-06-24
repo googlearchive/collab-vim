@@ -1476,7 +1476,7 @@ EXTRA_SRC = hangulin.c if_lua.c if_mzsch.c auto/if_perl.c if_perlsfio.c \
 	    gui_beval.c workshop.c wsdebug.c integration.c netbeans.c
 
 # All sources, also the ones that are not configured
-ALL_SRC = $(BASIC_SRC) $(ALL_GUI_SRC) $(EXTRA_SRC)
+ALL_SRC = $(BASIC_SRC) $(ALL_GUI_SRC) $(EXTRA_SRC) $(UNITTEST_SRC)
 
 # Which files to check with lint.  Select one of these three lines.  ALL_SRC
 # checks more, but may not work well for checking a GUI that wasn't configured.
@@ -1486,6 +1486,15 @@ LINT_SRC = $(BASIC_SRC) $(GUI_SRC) $(HANGULIN_SRC) $(PYTHON_SRC) $(PYTHON3_SRC) 
 #LINT_SRC = $(SRC)
 #LINT_SRC = $(ALL_SRC)
 #LINT_SRC = $(BASIC_SRC)
+
+UNITTEST_SRC = \
+	testcollab/testall.cc \
+	testcollab/collaborate_unittest.cc
+
+UNITTEST_OBJ = \
+	objects/testall.o \
+	objects/collaborate_unittest.o
+
 
 OBJ = \
 	objects/buffer.o \
@@ -1801,6 +1810,21 @@ types.vim: $(TAGS_SRC) $(TAGS_INCL)
 	ctags --c-kinds=gstu -o- $(TAGS_SRC) $(TAGS_INCL) |\
 		awk 'BEGIN{printf("syntax keyword Type\t")}\
 			{printf("%s ", $$1)}END{print ""}' > $@
+
+
+# Run collaborative unittests
+
+# sel_ldr requires nexe
+publish/vim_testcollab.nexe: $(UNITTEST_OBJ)
+	# Compile test src into a pexe and then finalize it
+	$(CXX) $^ $(LDFLAGS) -I$(srcdir) $(ALL_CFLAGS) -o publish/vim_testcollab.pexe $(TEST_LIBS)
+	$(PNACL_FINALIZE) publish/vim_testcollab.pexe -o publish/vim_testcollab.fin.pexe
+	# Translate to a nexe so that we may run it with sel_ldr
+	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
+
+testcollab: publish/vim_testcollab.nexe
+	$(NACL_SEL_LDR) publish/vim_testcollab.nexe
+
 
 # Execute the test scripts.  Run these after compiling Vim, before installing.
 # This doesn't depend on $(VIMTARGET), because that won't work when configure
@@ -2661,6 +2685,15 @@ objects/netbeans.o: netbeans.c
 objects/collaborate.o: collaborate.c
 	$(CCC) -o $@ collaborate.c
 
+# Test obj files
+CCXX = $(CXX) -c -I$(srcdir) $(ALL_CFLAGS)
+
+objects/testall.o: testcollab/testall.cc
+	$(CCXX) -o $@ testcollab/testall.cc
+
+objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc
+	$(CCXX) -o $@ testcollab/collaborate_unittest.cc
+
 Makefile:
 	@echo The name of the makefile MUST be "Makefile" (with capital M)!!!!
 
@@ -2927,3 +2960,5 @@ objects/wsdebug.o: wsdebug.c
 objects/netbeans.o: netbeans.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
   collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
+objects/testall.o: testcollab/testall.cc
+objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc
