@@ -1321,7 +1321,7 @@ SHELL = /bin/sh
 .SUFFIXES: .c .o .pro
 
 PRE_DEFS = -Iproto $(DEFS) $(GUI_DEFS) $(GUI_IPATH) $(CPPFLAGS) $(EXTRA_IPATHS)
-POST_DEFS = $(X_CFLAGS) $(MZSCHEME_CFLAGS) $(TCL_CFLAGS) $(RUBY_CFLAGS) $(EXTRA_DEFS)
+POST_DEFS = $(X_CFLAGS) $(MZSCHEME_CFLAGS) $(TCL_CFLAGS) $(RUBY_CFLAGS) $(EXTRA_DEFS) $(TEST_FLAGS)
 
 ALL_CFLAGS = $(PRE_DEFS) $(CFLAGS) $(PROFILE_CFLAGS) $(POST_DEFS)
 
@@ -1402,6 +1402,15 @@ DEST_MAN_RU_U = $(DEST_MAN_TOP)/ru.UTF-8$(MAN1DIR)
 #	     TAGS_INCL: include files used for make tags
 #	       ALL_SRC: source files used for make depend and make lint
 
+UNITTEST_SRC = \
+	testcollab/testcollab_main.cc \
+	testcollab/collaborate_unittest.cc
+
+UNITTEST_OBJ = \
+	objects/testcollab_main.o \
+	objects/collaborate_unittest.o
+
+
 TAGS_INCL = *.h
 
 BASIC_SRC = \
@@ -1467,6 +1476,7 @@ SRC =	$(BASIC_SRC) \
 	$(RUBY_SRC) \
 	$(SNIFF_SRC) \
 	$(WORKSHOP_SRC) \
+	$(UNITTEST_SRC) \
 	$(WSDEBUG_SRC)
 
 TAGS_SRC = *.c *.cpp if_perl.xs
@@ -1486,15 +1496,6 @@ LINT_SRC = $(BASIC_SRC) $(GUI_SRC) $(HANGULIN_SRC) $(PYTHON_SRC) $(PYTHON3_SRC) 
 #LINT_SRC = $(SRC)
 #LINT_SRC = $(ALL_SRC)
 #LINT_SRC = $(BASIC_SRC)
-
-UNITTEST_SRC = \
-	testcollab/testall.cc \
-	testcollab/collaborate_unittest.cc
-
-UNITTEST_OBJ = \
-	objects/testall.o \
-	objects/collaborate_unittest.o
-
 
 OBJ = \
 	objects/buffer.o \
@@ -1559,6 +1560,7 @@ OBJ = \
 	$(OS_EXTRA_OBJ) \
 	$(WORKSHOP_OBJ) \
 	$(NETBEANS_OBJ) \
+	$(UNITTEST_OBJ) \
 	$(WSDEBUG_OBJ)
 
 PRO_AUTO = \
@@ -1814,16 +1816,28 @@ types.vim: $(TAGS_SRC) $(TAGS_INCL)
 
 # Run collaborative unittests
 
-# sel_ldr requires nexe
-publish/vim_testcollab.nexe: $(UNITTEST_OBJ)
-	# Compile test src into a pexe and then finalize it
-	$(CXX) $^ $(LDFLAGS) -I$(srcdir) $(ALL_CFLAGS) -o publish/vim_testcollab.pexe $(TEST_LIBS)
+# sel_ldr requires nexe // auto/config.mk objects $(OBJ)
+# TESTCOLLAB_LIBS = $(filter-out $(TEST_LIB_FILTER),$(ALL_LIBS))
+# publish/vim_testcollab.nexe: $(UNITTEST_OBJ) 
+# 	# Compile test src into a pexe and then finalize it
+# 	$(CXX) $(LDFLAGS) -o publish/vim_testcollab.pexe $^ $(TESTCOLLAB_LIBS)
+# 	$(PNACL_FINALIZE) publish/vim_testcollab.pexe -o publish/vim_testcollab.fin.pexe
+# 	# Translate to a nexe so that we may run it with sel_ldr
+# 	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
+
+TESTCOLLAB_OBJ = $(filter-out main.o,$(OBJ))
+publish/vim_testcollab.nexe: auto/config.mk objects $(OBJ) version.c version.h
+	$(CCC) version.c -o objects/version.o
+	@LINK="$(PURIFY) $(SHRPENV) $(CXX) $(ALL_LIB_DIRS) $(LDFLAGS) \
+		-o publish/vim_testcollab.pexe $(OBJ) objects/version.o $(ALL_LIBS)" \
+		MAKE="$(MAKE)" sh $(srcdir)/link.sh
 	$(PNACL_FINALIZE) publish/vim_testcollab.pexe -o publish/vim_testcollab.fin.pexe
 	# Translate to a nexe so that we may run it with sel_ldr
 	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
 
 testcollab: publish/vim_testcollab.nexe
 	$(NACL_SEL_LDR) publish/vim_testcollab.nexe
+
 
 
 # Execute the test scripts.  Run these after compiling Vim, before installing.
@@ -2688,8 +2702,8 @@ objects/collaborate.o: collaborate.c
 # Test obj files
 CCXX = $(CXX) -c -I$(srcdir) $(ALL_CFLAGS)
 
-objects/testall.o: testcollab/testall.cc
-	$(CCXX) -o $@ testcollab/testall.cc
+objects/testcollab_main.o: testcollab/testcollab_main.cc
+	$(CCXX) -o $@ testcollab/testcollab_main.cc
 
 objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc
 	$(CCXX) -o $@ testcollab/collaborate_unittest.cc
@@ -2960,5 +2974,8 @@ objects/wsdebug.o: wsdebug.c
 objects/netbeans.o: netbeans.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
   collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
-objects/testall.o: testcollab/testall.cc
-objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc
+objects/testcollab_main.o: testcollab/testcollab_main.cc
+objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc vim.h \
+  auto/config.h feature.h os_unix.h ascii.h keymap.h term.h macros.h \
+  option.h structs.h collaborate.h regexp.h gui.h ex_cmds.h proto.h \
+  globals.h
