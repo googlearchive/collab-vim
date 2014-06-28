@@ -1404,11 +1404,11 @@ DEST_MAN_RU_U = $(DEST_MAN_TOP)/ru.UTF-8$(MAN1DIR)
 
 UNITTEST_SRC = \
 	testcollab/testcollab_main.cc \
-	testcollab/collaborate_unittest.cc
+	testcollab/collaborate_test.cc
 
 UNITTEST_OBJ = \
 	objects/testcollab_main.o \
-	objects/collaborate_unittest.o
+	objects/collaborate_test.o
 
 
 TAGS_INCL = *.h
@@ -2705,8 +2705,8 @@ CCXX = $(CXX) -c -I$(srcdir) $(ALL_CFLAGS)
 objects/testcollab_main.o: testcollab/testcollab_main.cc
 	$(CCXX) -o $@ testcollab/testcollab_main.cc
 
-objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc
-	$(CCXX) -o $@ testcollab/collaborate_unittest.cc
+objects/collaborate_test.o: testcollab/collaborate_test.cc
+	$(CCXX) -o $@ testcollab/collaborate_test.cc
 
 Makefile:
 	@echo The name of the makefile MUST be "Makefile" (with capital M)!!!!
@@ -2799,183 +2799,183 @@ $(APPDIR)/Contents:
 ### Dependencies:
 objects/blowfish.o: blowfish.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/buffer.o: buffer.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/charset.o: charset.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/diff.o: diff.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/digraph.o: digraph.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/edit.o: edit.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/eval.o: eval.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/ex_cmds.o: ex_cmds.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/ex_cmds2.o: ex_cmds2.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/ex_docmd.o: ex_docmd.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/ex_eval.o: ex_eval.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/ex_getln.o: ex_getln.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/fileio.o: fileio.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/fold.o: fold.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/getchar.o: getchar.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/hardcopy.o: hardcopy.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/hashtab.o: hashtab.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/if_cscope.o: if_cscope.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h if_cscope.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h \
+  if_cscope.h
 objects/if_xcmdsrv.o: if_xcmdsrv.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/main.o: main.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h farsi.c arabic.c
 objects/mark.o: mark.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/memfile.o: memfile.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/memline.o: memline.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/menu.o: menu.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/message.o: message.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/misc1.o: misc1.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/misc2.o: misc2.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/move.o: move.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/mbyte.o: mbyte.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/normal.o: normal.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/ops.o: ops.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h ascii.h \
-  keymap.h term.h macros.h option.h structs.h collaborate.h regexp.h \
+  keymap.h term.h macros.h option.h structs.h collab_structs.h regexp.h \
   gui.h ex_cmds.h proto.h globals.h
 objects/option.o: option.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/os_unix.o: os_unix.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h os_unixx.h
 objects/pathdef.o: auto/pathdef.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/popupmnu.o: popupmnu.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/quickfix.o: quickfix.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/regexp.o: regexp.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/screen.o: screen.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/search.o: search.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/sha256.o: sha256.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/spell.o: spell.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/syntax.o: syntax.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/tag.o: tag.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h ascii.h \
-  keymap.h term.h macros.h option.h structs.h collaborate.h regexp.h \
+  keymap.h term.h macros.h option.h structs.h collab_structs.h regexp.h \
   gui.h ex_cmds.h proto.h globals.h
 objects/term.o: term.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/undo.o: undo.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/version.o: version.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/window.o: window.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/collaborate.o: collaborate.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/gui.o: gui.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h ascii.h \
-  keymap.h term.h macros.h option.h structs.h collaborate.h regexp.h \
+  keymap.h term.h macros.h option.h structs.h collab_structs.h regexp.h \
   gui.h ex_cmds.h proto.h globals.h
 objects/gui_gtk.o: gui_gtk.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
-  ascii.h keymap.h term.h macros.h option.h structs.h collaborate.h \
+  ascii.h keymap.h term.h macros.h option.h structs.h collab_structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h ../pixmaps/stock_icons.h
 objects/gui_xmebw.o: gui_xmebw.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/gui_gtk_x11.o: gui_gtk_x11.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h \
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h \
   ../runtime/vim32x32.xpm ../runtime/vim16x16.xpm \
   ../runtime/vim48x48.xpm
 objects/gui_at_fs.o: gui_at_fs.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/pty.o: pty.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h ascii.h \
-  keymap.h term.h macros.h option.h structs.h collaborate.h regexp.h \
+  keymap.h term.h macros.h option.h structs.h collab_structs.h regexp.h \
   gui.h ex_cmds.h proto.h globals.h
 objects/hangulin.o: hangulin.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h
 objects/if_mzsch.o: if_mzsch.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h if_mzsch.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h if_mzsch.h
 objects/if_sniff.o: if_sniff.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h os_unixx.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h os_unixx.h
 objects/wsdebug.o: wsdebug.c
 objects/netbeans.o: netbeans.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
-  collaborate.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
+  collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h version.h
 objects/testcollab_main.o: testcollab/testcollab_main.cc
-objects/collaborate_unittest.o: testcollab/collaborate_unittest.cc vim.h \
-  auto/config.h feature.h os_unix.h ascii.h keymap.h term.h macros.h \
-  option.h structs.h collaborate.h regexp.h gui.h ex_cmds.h proto.h \
-  globals.h
+objects/collaborate_test.o: testcollab/collaborate_test.cc vim.h auto/config.h \
+  feature.h os_unix.h ascii.h keymap.h term.h macros.h option.h \
+  structs.h collab_structs.h regexp.h gui.h ex_cmds.h proto.h globals.h

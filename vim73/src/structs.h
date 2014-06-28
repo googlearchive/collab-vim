@@ -10,7 +10,7 @@
  * This file contains various definitions of structures that are used by Vim
  */
 
-#include "collaborate.h"
+#include "collab_structs.h"
 
 /*
  * There is something wrong in the SAS compiler that makes typedefs not
