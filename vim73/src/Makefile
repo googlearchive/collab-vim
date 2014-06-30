@@ -1815,16 +1815,6 @@ types.vim: $(TAGS_SRC) $(TAGS_INCL)
 
 
 # Run collaborative unittests
-
-# sel_ldr requires nexe // auto/config.mk objects $(OBJ)
-# TESTCOLLAB_LIBS = $(filter-out $(TEST_LIB_FILTER),$(ALL_LIBS))
-# publish/vim_testcollab.nexe: $(UNITTEST_OBJ) 
-# 	# Compile test src into a pexe and then finalize it
-# 	$(CXX) $(LDFLAGS) -o publish/vim_testcollab.pexe $^ $(TESTCOLLAB_LIBS)
-# 	$(PNACL_FINALIZE) publish/vim_testcollab.pexe -o publish/vim_testcollab.fin.pexe
-# 	# Translate to a nexe so that we may run it with sel_ldr
-# 	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
-
 TESTCOLLAB_OBJ = $(filter-out main.o,$(OBJ))
 publish/vim_testcollab.nexe: auto/config.mk objects $(OBJ) version.c version.h
 	$(CCC) version.c -o objects/version.o
@@ -1835,6 +1825,7 @@ publish/vim_testcollab.nexe: auto/config.mk objects $(OBJ) version.c version.h
 	# Translate to a nexe so that we may run it with sel_ldr
 	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
 
+.PHONY: testcollab
 testcollab: publish/vim_testcollab.nexe
 	$(NACL_SEL_LDR) publish/vim_testcollab.nexe
 
