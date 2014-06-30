@@ -119,7 +119,12 @@ ui_inchar(buf, maxlen, wtime, tb_change_cnt)
 {
     int		retval = 0;
 
-    collab_bufcheck();
+    // If there are pending collaborative edits, get an event key sequence here
+    retval = collab_inchar(buf, maxlen);
+    if (retval != 0)
+    {
+        return retval;
+    }
 
 #if defined(FEAT_GUI) && (defined(UNIX) || defined(VMS))
     /*

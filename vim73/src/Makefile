@@ -1325,6 +1325,8 @@ POST_DEFS = $(X_CFLAGS) $(MZSCHEME_CFLAGS) $(TCL_CFLAGS) $(RUBY_CFLAGS) $(EXTRA_
 
 ALL_CFLAGS = $(PRE_DEFS) $(CFLAGS) $(PROFILE_CFLAGS) $(POST_DEFS)
 
+$(info flags are [${CFLAGS}])
+
 # Exclude $CFLAGS for osdef.sh, for Mac 10.4 some flags don't work together
 # with "-E".
 OSDEF_CFLAGS = $(PRE_DEFS) $(POST_DEFS)
@@ -1821,9 +1823,8 @@ publish/vim_testcollab.nexe: auto/config.mk objects $(OBJ) version.c version.h
 	@LINK="$(PURIFY) $(SHRPENV) $(CXX) $(ALL_LIB_DIRS) $(LDFLAGS) \
 		-o publish/vim_testcollab.pexe $(OBJ) objects/version.o $(ALL_LIBS)" \
 		MAKE="$(MAKE)" sh $(srcdir)/link.sh
-	$(PNACL_FINALIZE) publish/vim_testcollab.pexe -o publish/vim_testcollab.fin.pexe
 	# Translate to a nexe so that we may run it with sel_ldr
-	$(PNACL_TRANSLATE) publish/vim_testcollab.fin.pexe -o $@
+	$(PNACL_TRANSLATE) --allow-llvm-bitcode-input publish/vim_testcollab.pexe -o $@
 
 .PHONY: testcollab
 testcollab: publish/vim_testcollab.nexe

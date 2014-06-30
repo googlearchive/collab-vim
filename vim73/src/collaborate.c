@@ -10,6 +10,8 @@
 #include "vim.h"
 #include <pthread.h>
 
+#include "collab_util.h"
+
 /*
  * A node in the queue
  */
@@ -27,6 +29,11 @@ static pthread_mutex_t qmutex = PTHREAD_MUTEX_INITIALIZER;
 
 /* The collaborative file buffer */
 static buf_T *collab_buf = NULL;
+
+/* Sequence of keys interpretted as a collaborative event */
+static char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
+/* The next key in the sequence to send to the user input buffer */
+static int next_key = -1;
 
 /*
  * Sets the current collaborative buffer.
@@ -128,23 +135,57 @@ void collab_applyedits() {
 }
 
 /*
- * When called, if there are pending edits to process, this will insert a 
- * special character sequence into vim's user input buffer. When the sequence
- * is read, it will trigger a call to collab_process. Seems a little hacky, but
- * this is how vim processes special events. This function should only be
- * called from vim's main thread.
+ * When called, if there are pending edits to process, this will copy up to
+ * "maxlen" characters of a special sequence into "buf". When the sequence is
+ * read by vim's user input processor, it will trigger a call to 
+ * collab_process. Seems a little hacky, but this is how vim processes special
+ * events. This function should only be called from vim's main thread.
+ * Returns the number of characters copied into the buffer.
  */
-void collab_bufcheck() {
-  int pending_edits;
-  // Wait for exclusive access to the queue
-  pthread_mutex_lock(&qmutex);  
-  pending_edits = (edithead != NULL);
-  // Release exclusive access to the queue
-  pthread_mutex_unlock(&qmutex);
-
-  if (pending_edits) {
-    char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
-    ui_inchar_undo(collab_keys, 3);
+int collab_inchar(char_u *buf, int maxlen) {
+  // If not in the process of sending the complete sequence... 
+  if (next_key < 0) {
+    pthread_mutex_lock(&qmutex);
+    if (edithead != NULL) {
+      // There are pending edits, so the sequence should begin
+      next_key = 0;
+    }
+    pthread_mutex_unlock(&qmutex);
   }
+
+  int nkeys = 0;
+  // If copying the sequence...
+  if (next_key >= 0) {
+    // Determine number of keys to copy
+    nkeys = 3 - next_key;
+    if (nkeys > maxlen) {
+      nkeys = maxlen;
+    }
+
+    memcpy(buf, (collab_keys+next_key), nkeys*sizeof(char_u));
+
+    // Determine the next key to copy if not complete    
+    next_key += nkeys;
+    if (next_key >= 3) {
+      next_key = -1;
+    }
+  }
+
+  // Return number of copied keys
+  return nkeys;
 }
 
+// Declaration in collab_util.h
+collabedit_T* collab_dequeue() {
+  if (edithead == NULL) return NULL;
+
+  editqueue_T* oldhead = edithead;
+  edithead = oldhead->next;
+
+  if (edithead == NULL) edittail = NULL;
+
+  collabedit_T *popped = oldhead->edit;
+  free(oldhead);
+
+  return popped;
+}
