@@ -1,0 +1,6 @@
+# Ignore everything in auto/ except this file and the configure script
+
+*
+!configure
+!.gitignore
+

@@ -7,8 +7,6 @@
 *.swp
 
 # Vim source
-vim*/src/auto/*         	# Ignore platform specific auto-gen
-!vim*/src/auto/configure	# ...But keep the configure script
-vim*/src/publish
-vim*/src/objects
+/vim*/src/publish
+/vim*/src/objects
 
