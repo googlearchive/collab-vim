@@ -82,27 +82,30 @@ void collab_enqueue(collabedit_T *cedit) {
  */
 static void applyedit(collabedit_T *cedit) {
   // TODO(zpotter): Interpret index as character, not line numer
+
+  // First select the right collaborative buffer
+  buf_T *oldbuf = curbuf;
+  if (curbuf != collab_buf) set_curbuf(collab_buf, DOBUF_GOTO);
+
+  // Apply edit depending on type
   switch (cedit->type) {
     case COLLAB_TEXT_DELETE:
-      // Delete a line from the buffer TODO figure out buffer spec
+      // Delete the specified line from the buffer
       ml_delete(cedit->edit.text_delete.index, 0);
-      // TODO(zpotter): determine if mark_adjust should be called when edit is not for current buf_T
-      if (curbuf == collab_buf) {
-        // If we modified the current buffer, update cursor and mark for redraw
-        deleted_lines_mark(cedit->edit.text_delete.index, 1);
-      }
+      // Update cursor and mark for redraw
+      deleted_lines_mark(cedit->edit.text_delete.index, 1);
       break;
 
     case COLLAB_TEXT_INSERT:
       // Add the new line to the buffer
-      ml_append_buf(collab_buf, cedit->edit.text_insert.index, 
-        cedit->edit.text_insert.text, 0, FALSE);
-      if (curbuf == collab_buf) {
-        // If we modified the current buffer, update cursor and mark for redraw
-        appended_lines_mark(cedit->edit.text_insert.index+1, 1);
-      }
+      ml_append(cedit->edit.text_insert.index, cedit->edit.text_insert.text, 0, FALSE);
+      // Update cursor and mark for redraw
+      appended_lines_mark(cedit->edit.text_insert.index+1, 1);
       break;
   }
+  // Switch back to old buffer if necessary 
+  if (curbuf != oldbuf) set_curbuf(oldbuf, DOBUF_GOTO);
+
   // Done with collabedit_T, so free it
   free(cedit);
 }
