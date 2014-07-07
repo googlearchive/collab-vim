@@ -120,7 +120,7 @@ ui_inchar(buf, maxlen, wtime, tb_change_cnt)
     int		retval = 0;
 
     // If there are pending collaborative edits, get an event key sequence here
-    retval = collab_inchar(buf, maxlen);
+    retval = collab_inchar(buf, maxlen, collab_queue);
     if (retval != 0)
     {
         return retval;

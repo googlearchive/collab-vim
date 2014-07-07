@@ -14,7 +14,7 @@
 /*
  * Dequeues a single collabedit_T.
  */
-collabedit_T* collab_dequeue();
+collabedit_T* collab_dequeue(editqueue_T *queue);
 
 #endif // VIM_COLLAB_UTIL_H_
 

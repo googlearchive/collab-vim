@@ -11,6 +11,13 @@
  */
 
 /*
+ * The global collaborative edit queue used for collaborative functions.
+ * Forward declares the struct type. The queue is initialized in collaborate.c.
+ */
+struct editqueue_S;
+extern struct editqueue_S *collab_queue;
+
+/*
  * Number of Rows and Columns in the screen.
  * Must be long to be able to use them as options in option.c.
  * Note: Use screen_Rows and screen_Columns to access items in ScreenLines[].

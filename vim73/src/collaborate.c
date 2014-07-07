@@ -13,23 +13,12 @@
 #include "collab_structs.h"
 #include "collab_util.h"
 
-/*
- * A node in the queue
- */
-typedef struct editqueue_S {
-  collabedit_T *edit;
-  struct editqueue_S *next;
-} editqueue_T;
-
-/* The head and tail of the queue */
-static editqueue_T *edithead = NULL;
-static editqueue_T *edittail = NULL;
-
-/* Must lock this mutex to safely use the queue */
-static pthread_mutex_t qmutex = PTHREAD_MUTEX_INITIALIZER;
-
-/* The collaborative file buffer */
-static buf_T *collab_buf = NULL;
+/* The global queue to hold edits for loaded file buffers. */
+editqueue_T *collab_queue = &(editqueue_T) { 
+  .head = NULL,
+  .tail = NULL,
+  .mutex = PTHREAD_MUTEX_INITIALIZER
+};
 
 /* Sequence of keys interpretted as a collaborative event */
 static const char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
@@ -37,16 +26,6 @@ static const size_t collab_keys_length =
   sizeof(collab_keys) / sizeof(collab_keys[0]);
 /* The next key in the sequence to send to the user input buffer */
 static int next_key_index = -1;
-
-/*
- * Sets the current collaborative buffer.
- * Returns the old buffer, or NULL.
- */
-buf_T* collab_setbuf(buf_T *buf) {
-  buf_T *old_buf = collab_buf;
-  collab_buf = buf;
-  return old_buf;
-}
 
 // TODO(zpotter):
 // Provides methods for communicating with the JS layer
@@ -59,26 +38,26 @@ buf_T* collab_setbuf(buf_T *buf) {
  * and frees it after it has been applied to the buffer. This function is 
  * thread-safe and may block until the shared queue is safe to modify.
  */
-void collab_enqueue(collabedit_T *cedit) {
-  editqueue_T *node = (editqueue_T*)malloc(sizeof(editqueue_T));
+void collab_enqueue(editqueue_T *queue, collabedit_T *cedit) {
+  editnode_T *node = (editnode_T*)malloc(sizeof(editnode_T));
   node->edit = cedit;
   node->next = NULL;
 
   // Wait for exclusive access to the queue
-  pthread_mutex_lock(&qmutex);
+  pthread_mutex_lock(&(queue->mutex));
 
   // Enqueue!
-  if (edittail == NULL) {
+  if (queue->tail == NULL) {
     // Queue was empty
-    edithead = node;
+    queue->head = node;
   } else {
     // Add to end
-    edittail->next = node;
+    queue->tail->next = node;
   }
-  edittail = node;
+  queue->tail = node;
 
   // Release exclusive access to queue
-  pthread_mutex_unlock(&qmutex);
+  pthread_mutex_unlock(&(queue->mutex));
 }
 
 /*
@@ -87,7 +66,7 @@ void collab_enqueue(collabedit_T *cedit) {
 static void applyedit(collabedit_T *cedit) {
   // First select the right collaborative buffer
   buf_T *oldbuf = curbuf;
-  if (curbuf != collab_buf) set_curbuf(collab_buf, DOBUF_GOTO);
+  if (curbuf != cedit->file_buf) set_curbuf(cedit->file_buf, DOBUF_GOTO);
 
   // Apply edit depending on type
   switch (cedit->type) {
@@ -120,17 +99,17 @@ static void applyedit(collabedit_T *cedit) {
  * This function should only be called from vim's main thread when it is safe
  * to modify the file buffer.
  */
-void collab_applyedits() {
-  editqueue_T *edits_todo = NULL; 
-  editqueue_T *lastedit = NULL;
+void collab_applyedits(editqueue_T *queue) {
+  editnode_T *edits_todo = NULL; 
+  editnode_T *lastedit = NULL;
   // Dequeue entire edit queue for processing
   // Wait for exclusive access to the queue
-  pthread_mutex_lock(&qmutex);  
-  edits_todo = edithead;
+  pthread_mutex_lock(&(queue->mutex));  
+  edits_todo = queue->head;
   // Clear queue
-  edithead = NULL;
-  edittail = NULL;
-  pthread_mutex_unlock(&qmutex);
+  queue->head = NULL;
+  queue->tail = NULL;
+  pthread_mutex_unlock(&(queue->mutex));
 
   // Apply all pending edits
   while (edits_todo) {
@@ -150,15 +129,15 @@ void collab_applyedits() {
  * events. This function should only be called from vim's main thread.
  * Returns the number of characters copied into the buffer.
  */
-int collab_inchar(char_u *buf, int maxlen) {
+int collab_inchar(char_u *buf, int maxlen, editqueue_T *queue) {
   // If not in the process of sending the complete sequence... 
   if (next_key_index < 0) {
-    pthread_mutex_lock(&qmutex);
-    if (edithead) {
+    pthread_mutex_lock(&(queue->mutex));
+    if (queue->head) {
       // There are pending edits, so the sequence should begin
       next_key_index = 0;
     }
-    pthread_mutex_unlock(&qmutex);
+    pthread_mutex_unlock(&(queue->mutex));
   }
 
   int nkeys = 0;
@@ -184,13 +163,13 @@ int collab_inchar(char_u *buf, int maxlen) {
 }
 
 // Declaration in collab_util.h
-collabedit_T* collab_dequeue() {
-  if (edithead == NULL) return NULL;
+collabedit_T* collab_dequeue(editqueue_T *queue) {
+  if (queue->head == NULL) return NULL;
 
-  editqueue_T* oldhead = edithead;
-  edithead = oldhead->next;
+  editnode_T* oldhead = queue->head;
+  queue->head = oldhead->next;
 
-  if (edithead == NULL) edittail = NULL;
+  if (queue->head == NULL) queue->tail = NULL;
 
   collabedit_T *popped = oldhead->edit;
   free(oldhead);
