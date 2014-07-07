@@ -10,6 +10,7 @@
 #include "vim.h"
 #include <pthread.h>
 
+#include "collab_structs.h"
 #include "collab_util.h"
 
 /*
@@ -31,9 +32,11 @@ static pthread_mutex_t qmutex = PTHREAD_MUTEX_INITIALIZER;
 static buf_T *collab_buf = NULL;
 
 /* Sequence of keys interpretted as a collaborative event */
-static char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
+static const char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
+static const size_t collab_keys_length = 
+  sizeof(collab_keys) / sizeof(collab_keys[0]);
 /* The next key in the sequence to send to the user input buffer */
-static int next_key = -1;
+static int next_key_index = -1;
 
 /*
  * Sets the current collaborative buffer.
@@ -52,7 +55,8 @@ buf_T* collab_setbuf(buf_T *buf) {
 // bool receive_collabedit(PPB_Var *var);
 
 /*
- * Places a collabedit_T in a queue of pending edits. This function is
+ * Places a collabedit_T in a queue of pending edits. Takes ownership of cedit
+ * and frees it after it has been applied to the buffer. This function is 
  * thread-safe and may block until the shared queue is safe to modify.
  */
 void collab_enqueue(collabedit_T *cedit) {
@@ -78,11 +82,9 @@ void collab_enqueue(collabedit_T *cedit) {
 }
 
 /*
- * Applies a single collabedit_T to the collab_buf.
+ * Applies a single collabedit_T to the collab_buf. Frees cedit when done.
  */
 static void applyedit(collabedit_T *cedit) {
-  // TODO(zpotter): Interpret index as character, not line numer
-
   // First select the right collaborative buffer
   buf_T *oldbuf = curbuf;
   if (curbuf != collab_buf) set_curbuf(collab_buf, DOBUF_GOTO);
@@ -91,16 +93,19 @@ static void applyedit(collabedit_T *cedit) {
   switch (cedit->type) {
     case COLLAB_TEXT_DELETE:
       // Delete the specified line from the buffer
-      ml_delete(cedit->edit.text_delete.index, 0);
+      ml_delete(cedit->edit.text_delete.line, 0);
       // Update cursor and mark for redraw
-      deleted_lines_mark(cedit->edit.text_delete.index, 1);
+      deleted_lines_mark(cedit->edit.text_delete.line, 1);
       break;
 
     case COLLAB_TEXT_INSERT:
       // Add the new line to the buffer
-      ml_append(cedit->edit.text_insert.index, cedit->edit.text_insert.text, 0, FALSE);
-      // Update cursor and mark for redraw
-      appended_lines_mark(cedit->edit.text_insert.index+1, 1);
+      ml_append(cedit->edit.text_insert.line, cedit->edit.text_insert.text, 0, FALSE);
+      // Update cursor and mark for redraw.
+      // Just appended a line bellow (text_insert.line + 1)
+      appended_lines_mark(cedit->edit.text_insert.line + 1, 1);
+      // Free up union specifics
+      free(cedit->edit.text_insert.text);
       break;
   }
   // Switch back to old buffer if necessary 
@@ -128,7 +133,7 @@ void collab_applyedits() {
   pthread_mutex_unlock(&qmutex);
 
   // Apply all pending edits
-  while (edits_todo != NULL) {
+  while (edits_todo) {
     // Process the collabedit_T
     applyedit(edits_todo->edit);
     lastedit = edits_todo;
@@ -147,30 +152,30 @@ void collab_applyedits() {
  */
 int collab_inchar(char_u *buf, int maxlen) {
   // If not in the process of sending the complete sequence... 
-  if (next_key < 0) {
+  if (next_key_index < 0) {
     pthread_mutex_lock(&qmutex);
-    if (edithead != NULL) {
+    if (edithead) {
       // There are pending edits, so the sequence should begin
-      next_key = 0;
+      next_key_index = 0;
     }
     pthread_mutex_unlock(&qmutex);
   }
 
   int nkeys = 0;
   // If copying the sequence...
-  if (next_key >= 0) {
+  if (next_key_index >= 0) {
     // Determine number of keys to copy
-    nkeys = 3 - next_key;
+    nkeys = collab_keys_length - next_key_index;
     if (nkeys > maxlen) {
       nkeys = maxlen;
     }
 
-    memcpy(buf, (collab_keys+next_key), nkeys*sizeof(char_u));
+    memcpy(buf, (collab_keys+next_key_index), nkeys*sizeof(char_u));
 
     // Determine the next key to copy if not complete    
-    next_key += nkeys;
-    if (next_key >= 3) {
-      next_key = -1;
+    next_key_index += nkeys;
+    if (next_key_index >= collab_keys_length) {
+      next_key_index = -1;
     }
   }
 

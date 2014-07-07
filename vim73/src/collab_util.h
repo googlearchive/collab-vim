@@ -9,7 +9,7 @@
 #ifndef VIM_COLLAB_UTIL_H_
 #define VIM_COLLAB_UTIL_H_
 
-#include "vim.h"
+#include "collab_structs.h"
 
 /*
  * Dequeues a single collabedit_T.
