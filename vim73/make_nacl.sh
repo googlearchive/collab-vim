@@ -40,9 +40,8 @@ export NACL_CLI_MAIN_LIB="-Wl,--undefined=PSUserCreateInstance -lcli_main"
 export NACL_CPP_LIB="c++"
 
 export EXTRA_LIBS="${NACL_CLI_MAIN_LIB} -ltar -lppapi_simple -lnacl_io \
-  -lppapi -lppapi_cpp -l${NACL_CPP_LIB}"
-export TEST_LIBS="-lgtest"
-
+  -lppapi -lppapi_cpp -l${NACL_CPP_LIB} -lgtest\
+  -DGTEST_DONT_DEFINE_FAIL=1" # gtest's FAIL macro clashes with vim's
 
 # Configuration
 export vim_cv_toupper_broken=1
