@@ -15,7 +15,7 @@
  * Forward declares the struct type. The queue is initialized in collaborate.c.
  */
 struct editqueue_S;
-extern struct editqueue_S *collab_queue;
+extern struct editqueue_S collab_queue;
 
 /*
  * Number of Rows and Columns in the screen.

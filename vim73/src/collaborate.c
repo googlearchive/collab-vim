@@ -14,7 +14,7 @@
 #include "collab_util.h"
 
 /* The global queue to hold edits for loaded file buffers. */
-editqueue_T *collab_queue = &(editqueue_T) { 
+editqueue_T collab_queue = { 
   .head = NULL,
   .tail = NULL,
   .mutex = PTHREAD_MUTEX_INITIALIZER

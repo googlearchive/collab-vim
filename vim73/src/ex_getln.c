@@ -894,7 +894,7 @@ getcmdline(firstc, count, indent)
 	{
 
         case K_COLLABEDIT:
-            collab_applyedits(collab_queue);
+            collab_applyedits(&collab_queue);
             goto cmdline_not_changed;
 
 	case K_BS:
