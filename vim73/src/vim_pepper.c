@@ -5,16 +5,13 @@
  */
 
 #include <assert.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <libtar.h>
 #include <limits.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "nacl_io/nacl_io.h"
-#include "ppapi_simple/ps_main.h"
 
 extern int nacl_vim_main(int argc, char *argv[]);
 
