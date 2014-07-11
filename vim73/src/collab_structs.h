@@ -8,6 +8,7 @@
 #define VIM_COLLAB_STRUCTS_H_
 
 #include <pthread.h>
+#include "vim.h"
 
 typedef enum {
   COLLAB_TEXT_DELETE,	/* When a collaborator deletes text */
@@ -45,10 +46,14 @@ typedef struct editnode_S {
  * The queue and its mutex.
  */
 typedef struct editqueue_S {
-  editnode_T *head;		/* The head of the queue. */
-  editnode_T *tail;		/* The tail of the queue. */
+  editnode_T *head;	/* The head of the queue. */
+  editnode_T *tail;	/* The tail of the queue. */
   
-  pthread_mutex_t mutex;	/* Lock this mutex before modifying queue. */
+  pthread_mutex_t mutex;/* Lock this mutex before modifying queue. */
+
+  int event_wfd;	/* File descriptor to write inside collab_enqueue. */ 
+  int event_rfd;	/* File descriptor that contains a byte for each event
+                	   in the queue. */
 } editqueue_T;
 
 #endif // VIM_COLLAB_STRUCTS_H_

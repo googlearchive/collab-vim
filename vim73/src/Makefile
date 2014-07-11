@@ -1465,6 +1465,7 @@ BASIC_SRC = \
 	version.c \
 	window.c \
 	collaborate.c \
+	vim_pepper.c \
 	$(OS_EXTRA_SRC)
 
 SRC =	$(BASIC_SRC) \
@@ -2887,7 +2888,7 @@ objects/option.o: option.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h 
   ex_cmds.h proto.h globals.h
 objects/os_unix.o: os_unix.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h \
   ascii.h keymap.h term.h macros.h option.h structs.h regexp.h gui.h \
-  ex_cmds.h proto.h globals.h os_unixx.h
+  ex_cmds.h proto.h globals.h collab_structs.h os_unixx.h
 objects/pathdef.o: auto/pathdef.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h
@@ -2933,7 +2934,11 @@ objects/window.o: window.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h 
 objects/collaborate.o: collaborate.c vim.h auto/config.h feature.h os_unix.h \
   auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
   regexp.h gui.h ex_cmds.h proto.h globals.h collab_structs.h \
-  collab_util.h
+  collab_util.h vim_pepper.h
+objects/vim_pepper.o: vim_pepper.c vim.h auto/config.h feature.h os_unix.h \
+  auto/osdef.h ascii.h keymap.h term.h macros.h option.h structs.h \
+  regexp.h gui.h ex_cmds.h proto.h globals.h vim_pepper.h \
+  collab_structs.h
 objects/gui.o: gui.c vim.h auto/config.h feature.h os_unix.h auto/osdef.h ascii.h \
   keymap.h term.h macros.h option.h structs.h regexp.h gui.h ex_cmds.h \
   proto.h globals.h

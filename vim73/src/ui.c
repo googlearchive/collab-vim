@@ -119,13 +119,6 @@ ui_inchar(buf, maxlen, wtime, tb_change_cnt)
 {
     int		retval = 0;
 
-    // If there are pending collaborative edits, get an event key sequence here
-    retval = collab_inchar(buf, maxlen, &collab_queue);
-    if (retval != 0)
-    {
-        return retval;
-    }
-
 #if defined(FEAT_GUI) && (defined(UNIX) || defined(VMS))
     /*
      * Use the typeahead if there is any.
@@ -1645,6 +1638,10 @@ read_from_input_buf(buf, maxlen)
     char_u  *buf;
     long    maxlen;
 {
+    // If there are pending collaborative edits, get an event key sequence here
+    int c_keys = collab_inchar(buf, maxlen, &collab_queue);
+    if (c_keys != 0) return c_keys;
+
     if (inbufcount == 0)	/* if the buffer is empty, fill it */
 	fill_input_buf(TRUE);
     if (maxlen > inbufcount)

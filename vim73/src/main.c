@@ -736,6 +736,9 @@ main
     prepare_server(&params);
 #endif
 
+    /* Set up collaborative data. */
+    collab_init();
+
     /*
      * If "-" argument given: Read file from stdin.
      * Do this before starting Raw mode, because it may change things that the
