@@ -25,7 +25,7 @@ typedef struct collabedit_S {
     struct {		/* COLLAB_TEXT_INSERT -> text_insert */
       size_t line;	/* The line number to insert after. Line 0 inserts at
                            very start of file. */
-      char_u *text;	/* The text to insert. Should end with a \n\0  */
+      char_u *text;	/* The text to insert. Should not end with a newline. */
     } text_insert;
     
     struct {		/* COLLAB_TEXT_DELETE -> text_delete */

@@ -65,6 +65,9 @@ static void* js_msgloop(void *unused) {
   
   PSEventSetFilter(PSE_INSTANCE_HANDLEMESSAGE);
   while (1) {
+    // TODO(zpotter): Right now, incoming messages that are strings are assumed
+    // to be text inserts for simplicity. Figure out best way to model realtime
+    // events.
     event = PSEventWaitAcquire();
     if (event->as_var.type != PP_VARTYPE_STRING) continue;
 
@@ -103,7 +106,7 @@ int nacl_main(int argc, char* argv[]) {
   return nacl_vim_main(argc, argv);
 }
 
-// Print to the js console
+// Print to the js console.
 int js_printf(const char* format, ...) {
   char *str;
   int printed;
@@ -113,6 +116,8 @@ int js_printf(const char* format, ...) {
   printed = vasprintf(&str, format, argp); 
   va_end(argp);
   if (printed >= 0) {
+    // The JS nacl_term just prints any unexpected message to the JS console.
+    // We can just send a plain string to have it printed.
     PSInterfaceMessaging()->PostMessage(
       PSGetInstanceId(),
       PSInterfaceVar()->VarFromUtf8(str, strlen(str))

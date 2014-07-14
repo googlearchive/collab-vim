@@ -5,6 +5,7 @@
 #include "gtest/gtest.h"
 
 extern "C" {
+#include "nacl_io/nacl_io.h"
 #include "vim.h"
 #include "collab_structs.h"
 #include "collab_util.h"
@@ -16,8 +17,10 @@ class CollaborativeEditQueue : public testing::Test {
  protected:
   // Sets up the default buffer for collaboration.
   virtual void SetUp() {
+    nacl_io_init();
     win_alloc_first();
     check_win_options(curwin);
+    collab_init();
   }
 
   // Clears the collaborative queue of edits.
@@ -26,6 +29,8 @@ class CollaborativeEditQueue : public testing::Test {
     while ((pop = collab_dequeue(&collab_queue)) != NULL) {
       free(pop);
     }
+    close(collab_queue.event_rfd);
+    close(collab_queue.event_wfd);
   }
 };
 
@@ -41,7 +46,7 @@ TEST_F(CollaborativeEditQueue, buffers_full_pending_keys) {
   int num_available = ui_inchar(inbuf, 3, 0, NULL);
 
   ASSERT_EQ(3, num_available);
-  ASSERT_EQ(CSI, inbuf[0]);
+  ASSERT_EQ(K_SPECIAL, inbuf[0]);
   ASSERT_EQ(KS_EXTRA, inbuf[1]);
   ASSERT_EQ(KE_COLLABEDIT, inbuf[2]);
 }
@@ -61,7 +66,7 @@ TEST_F(CollaborativeEditQueue, buffers_partial_pending_keys) {
   // Get a single char at a time
   int num_available = ui_inchar(inbuf, 1, 0, NULL);
   ASSERT_EQ(1, num_available);
-  ASSERT_EQ(CSI, inbuf[0]);
+  ASSERT_EQ(K_SPECIAL, inbuf[0]);
 
   num_available = ui_inchar(inbuf+1, 1, 0, NULL);
   ASSERT_EQ(1, num_available);
@@ -95,13 +100,13 @@ TEST_F(CollaborativeEditQueue, applies_text_insert) {
   hello_edit->type = COLLAB_TEXT_INSERT;
   hello_edit->file_buf = curbuf; 
   hello_edit->edit.text_insert.line = 0;
-  hello_edit->edit.text_insert.text = malloc_literal("Hello world!\n"); 
+  hello_edit->edit.text_insert.text = malloc_literal("Hello world!"); 
 
   collab_enqueue(&collab_queue, hello_edit);
   
   collab_applyedits(&collab_queue);
   
-  ASSERT_STREQ("Hello world!\n", reinterpret_cast<char *>(ml_get(1))); 
+  ASSERT_STREQ("Hello world!", reinterpret_cast<char *>(ml_get(1))); 
 
   // Check that queue is now empty
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
@@ -110,8 +115,8 @@ TEST_F(CollaborativeEditQueue, applies_text_insert) {
 // Tests that a single collabedit_T text delete is applied.
 TEST_F(CollaborativeEditQueue, applies_text_delete) {
   // Start with some text in the buffer.
-  ml_append(0, malloc_literal("Hello\n"), 0, FALSE);
-  ml_append(1, malloc_literal("world!\n"), 0, FALSE);
+  ml_append(0, malloc_literal("Hello"), 0, FALSE);
+  ml_append(1, malloc_literal("world!"), 0, FALSE);
   appended_lines_mark(1, 2);
 
   // Enqueue a delete edit and process it
@@ -124,7 +129,7 @@ TEST_F(CollaborativeEditQueue, applies_text_delete) {
   
   collab_applyedits(&collab_queue);
   
-  ASSERT_STREQ("world!\n", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("world!", reinterpret_cast<char *>(ml_get(1)));
 
   // Check that queue is now empty
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
@@ -146,21 +151,21 @@ TEST_F(CollaborativeEditQueue, restores_curbuf) {
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = buffalo; 
   edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffalo!\n"); 
+  edit->edit.text_insert.text = malloc_literal("Hello buffalo!"); 
   collab_enqueue(&collab_queue, edit);
   
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = buffoon;
   edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffoon!\n"); 
+  edit->edit.text_insert.text = malloc_literal("Hello buffoon!"); 
   collab_enqueue(&collab_queue, edit);
 
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = buffet; 
   edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffet!\n"); 
+  edit->edit.text_insert.text = malloc_literal("Hello buffet!"); 
   collab_enqueue(&collab_queue, edit);
 
   // Apply the edits.
@@ -172,13 +177,13 @@ TEST_F(CollaborativeEditQueue, restores_curbuf) {
 
   // Confirm contents of different buffers.
   set_curbuf(buffalo, DOBUF_GOTO);
-  ASSERT_STREQ("Hello buffalo!\n", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("Hello buffalo!", reinterpret_cast<char *>(ml_get(1)));
 
   set_curbuf(buffoon, DOBUF_GOTO);
-  ASSERT_STREQ("Hello buffoon!\n", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("Hello buffoon!", reinterpret_cast<char *>(ml_get(1)));
 
   set_curbuf(buffet, DOBUF_GOTO);
-  ASSERT_STREQ("Hello buffet!\n", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("Hello buffet!", reinterpret_cast<char *>(ml_get(1)));
 }
 
 // Tests that multiple collabedit_T's of different types can be applied.
@@ -188,14 +193,14 @@ TEST_F(CollaborativeEditQueue, applies_many_edits) {
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = curbuf;
   edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello\n");
+  edit->edit.text_insert.text = malloc_literal("Hello");
   collab_enqueue(&collab_queue, edit);
  
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = curbuf;
   edit->edit.text_insert.line = 1;
-  edit->edit.text_insert.text = malloc_literal("world!\n");
+  edit->edit.text_insert.text = malloc_literal("world!");
   collab_enqueue(&collab_queue, edit);
 
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
@@ -208,14 +213,14 @@ TEST_F(CollaborativeEditQueue, applies_many_edits) {
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = curbuf;
   edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Test my\n");
+  edit->edit.text_insert.text = malloc_literal("Test my");
   collab_enqueue(&collab_queue, edit);
 
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   edit->type = COLLAB_TEXT_INSERT;
   edit->file_buf = curbuf;
   edit->edit.text_insert.line = 1;
-  edit->edit.text_insert.text = malloc_literal("programmatic\n");
+  edit->edit.text_insert.text = malloc_literal("programmatic");
   collab_enqueue(&collab_queue, edit);
 
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
@@ -228,8 +233,8 @@ TEST_F(CollaborativeEditQueue, applies_many_edits) {
   collab_applyedits(&collab_queue);
 
   // Confirm expected output.
-  ASSERT_STREQ("programmatic\n", reinterpret_cast<char *>(ml_get(1)));
-  ASSERT_STREQ("world!\n", reinterpret_cast<char *>(ml_get(2))); 
+  ASSERT_STREQ("programmatic", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("world!", reinterpret_cast<char *>(ml_get(2))); 
 
   // Check that queue is now empty.
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
