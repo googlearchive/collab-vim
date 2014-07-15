@@ -58,7 +58,7 @@ static int setup_unix_environment(const char* tarfile) {
 /*
  * Waits for and handles all JS -> NaCL messages.
  * Unused parameter so this function can be used with pthreads. It seems that
- * nacl-clang doesn't like unnamed parameters.
+ * pnacl-clang doesn't like unnamed parameters.
  */
 static void* js_msgloop(void *unused) {
   PSEvent* event;
@@ -74,15 +74,15 @@ static void* js_msgloop(void *unused) {
     const char *message;
     uint32_t mlen;
     message = PSInterfaceVar()->VarToUtf8(event->as_var, &mlen);
-    char *ctext = (char *) malloc(mlen + 1); // +1 for null char
-    strncpy(ctext, message, mlen);
+    char_u *ctext = (char_u *) malloc(mlen + 1); // +1 for null char
+    memcpy(ctext, message, mlen);
     ctext[mlen] = '\0'; // Null terminate the string var
 
     collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
     edit->type = COLLAB_TEXT_INSERT;
     edit->file_buf = curbuf; 
     edit->edit.text_insert.line = 0;
-    edit->edit.text_insert.text = (char_u *) ctext;
+    edit->edit.text_insert.text = ctext;
 
     collab_enqueue(&collab_queue, edit);
     
@@ -118,10 +118,9 @@ int js_printf(const char* format, ...) {
   if (printed >= 0) {
     // The JS nacl_term just prints any unexpected message to the JS console.
     // We can just send a plain string to have it printed.
-    PSInterfaceMessaging()->PostMessage(
-      PSGetInstanceId(),
-      PSInterfaceVar()->VarFromUtf8(str, strlen(str))
-    );
+    struct PP_Var msg = PSInterfaceVar()->VarFromUtf8(str, strlen(str));
+    PSInterfaceMessaging()->PostMessage(PSGetInstanceId(), msg);
+    PSInterfaceVar()->Release(msg);
   }
   return printed;
 }

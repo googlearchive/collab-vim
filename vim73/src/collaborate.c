@@ -19,8 +19,8 @@ editqueue_T collab_queue = {
   .head = NULL,
   .tail = NULL,
   .mutex = PTHREAD_MUTEX_INITIALIZER,
-  .event_wfd = -1,
-  .event_rfd = -1
+  .event_write_fd = -1,
+  .event_read_fd = -1
 };
 
 /* Sequence of keys interpretted as a collaborative event */
@@ -41,8 +41,10 @@ void collab_init() {
     //TODO(zpotter): Handle this error from js-land
     js_printf("pipe failed to open");
   } else {
-    collab_queue.event_rfd = fds[0];
-    collab_queue.event_wfd = fds[1];
+    collab_queue.event_read_fd = fds[0];
+    collab_queue.event_write_fd = fds[1];
+    // Make reads non-blocking
+    fcntl(collab_queue.event_read_fd, F_SETFL, O_NONBLOCK);
   }
 }
 
@@ -75,7 +77,7 @@ void collab_enqueue(editqueue_T *queue, collabedit_T *cedit) {
   // Vim might be waiting indefinitely for user input, so signal that there is
   // a new event to process by writing a dummy character to the event pipe. The
   // written character will later be discarded by the reading end of the pipe.
-  write(queue->event_wfd, "X", 1);
+  write(queue->event_write_fd, "X", 1);
 }
 
 /*
@@ -99,7 +101,7 @@ static void applyedit(collabedit_T *cedit) {
       // Add the new line to the buffer
       ml_append(cedit->edit.text_insert.line, cedit->edit.text_insert.text, 0, FALSE);
       // Update cursor and mark for redraw.
-      // Just appended a line bellow text_insert.line
+      // Just appended a line below text_insert.line
       appended_lines_mark(cedit->edit.text_insert.line, 1);
       // Free up union specifics
       free(cedit->edit.text_insert.text);

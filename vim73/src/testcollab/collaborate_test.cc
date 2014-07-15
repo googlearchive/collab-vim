@@ -15,12 +15,16 @@ extern "C" {
 // and clears the collaborative edit queue on TearDown.
 class CollaborativeEditQueue : public testing::Test {
  protected:
+  // Sets up just once before the first test.
+  static void SetUpTestCase() {
+    nacl_io_init();
+    collab_init();
+  }
+  
   // Sets up the default buffer for collaboration.
   virtual void SetUp() {
-    nacl_io_init();
     win_alloc_first();
     check_win_options(curwin);
-    collab_init();
   }
 
   // Clears the collaborative queue of edits.
@@ -29,8 +33,6 @@ class CollaborativeEditQueue : public testing::Test {
     while ((pop = collab_dequeue(&collab_queue)) != NULL) {
       free(pop);
     }
-    close(collab_queue.event_rfd);
-    close(collab_queue.event_wfd);
   }
 };
 

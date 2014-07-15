@@ -1640,7 +1640,7 @@ read_from_input_buf(buf, maxlen)
 {
     // If there are pending collaborative edits, get an event key sequence here
     int c_keys = collab_inchar(buf, maxlen, &collab_queue);
-    if (c_keys != 0) return c_keys;
+    if (c_keys) return c_keys;
 
     if (inbufcount == 0)	/* if the buffer is empty, fill it */
 	fill_input_buf(TRUE);
