@@ -3056,8 +3056,10 @@ fix_input_buffer(buf, len, script)
 	if (p[0] == NUL || (p[0] == K_SPECIAL && !script
 #ifdef FEAT_AUTOCMD
 		    /* timeout may generate K_CURSORHOLD */
-		    && (i < 2 || p[1] != KS_EXTRA || p[2] != (int)KE_CURSORHOLD)
-// TODO(zpotter): Determine if K_COLLABEDIT needs a check here...
+                    /* May have received new collabedit */
+		    && (i < 2 || p[1] != KS_EXTRA 
+                        || (p[2] != (int)KE_CURSORHOLD
+                            && p[2] != (int)KE_COLLABEDIT))
 #endif
 #if defined(WIN3264) && !defined(FEAT_GUI)
 		    /* Win32 console passes modifiers */
@@ -3087,7 +3089,7 @@ fix_input_buffer(buf, len, script)
     int
 input_available()
 {
-    return (!vim_is_input_buf_empty()
+    return (!vim_is_input_buf_empty() || collab_pendingedits(&collab_queue)
 # if defined(FEAT_CLIENTSERVER) || defined(FEAT_EVAL)
 	    || typebuf_was_filled
 # endif

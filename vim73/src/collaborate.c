@@ -12,26 +12,41 @@
 
 #include "collab_structs.h"
 #include "collab_util.h"
+#include "vim_pepper.h"
 
 /* The global queue to hold edits for loaded file buffers. */
 editqueue_T collab_queue = { 
   .head = NULL,
   .tail = NULL,
-  .mutex = PTHREAD_MUTEX_INITIALIZER
+  .mutex = PTHREAD_MUTEX_INITIALIZER,
+  .event_write_fd = -1,
+  .event_read_fd = -1
 };
 
 /* Sequence of keys interpretted as a collaborative event */
-static const char_u collab_keys[3] = { CSI, KS_EXTRA, KE_COLLABEDIT };
+static const char_u collab_keys[3] = { K_SPECIAL, KS_EXTRA, KE_COLLABEDIT }; 
 static const size_t collab_keys_length = 
   sizeof(collab_keys) / sizeof(collab_keys[0]);
 /* The next key in the sequence to send to the user input buffer */
 static int next_key_index = -1;
 
-// TODO(zpotter):
-// Provides methods for communicating with the JS layer
-// Translates between PPB_Var's and collabedit_T's
-// void send_collabedit(collabedit_T *ev);
-// bool receive_collabedit(PPB_Var *var);
+/*
+ * Called from vim's main() before the main loop begins. Sets up data that
+ * needs some configuration.
+ */
+void collab_init() {
+  // Set up a signal pipe for the queue
+  int fds[2];
+  if (pipe(fds) == -1) {
+    //TODO(zpotter): Handle this error from js-land
+    js_printf("pipe failed to open");
+  } else {
+    collab_queue.event_read_fd = fds[0];
+    collab_queue.event_write_fd = fds[1];
+    // Make reads non-blocking
+    fcntl(collab_queue.event_read_fd, F_SETFL, O_NONBLOCK);
+  }
+}
 
 /*
  * Places a collabedit_T in a queue of pending edits. Takes ownership of cedit
@@ -58,6 +73,11 @@ void collab_enqueue(editqueue_T *queue, collabedit_T *cedit) {
 
   // Release exclusive access to queue
   pthread_mutex_unlock(&(queue->mutex));
+
+  // Vim might be waiting indefinitely for user input, so signal that there is
+  // a new event to process by writing a dummy character to the event pipe. The
+  // written character will later be discarded by the reading end of the pipe.
+  write(queue->event_write_fd, "X", 1);
 }
 
 /*
@@ -81,8 +101,8 @@ static void applyedit(collabedit_T *cedit) {
       // Add the new line to the buffer
       ml_append(cedit->edit.text_insert.line, cedit->edit.text_insert.text, 0, FALSE);
       // Update cursor and mark for redraw.
-      // Just appended a line bellow (text_insert.line + 1)
-      appended_lines_mark(cedit->edit.text_insert.line + 1, 1);
+      // Just appended a line below text_insert.line
+      appended_lines_mark(cedit->edit.text_insert.line, 1);
       // Free up union specifics
       free(cedit->edit.text_insert.text);
       break;
@@ -122,22 +142,29 @@ void collab_applyedits(editqueue_T *queue) {
 }
 
 /*
+ * Returns true if the queue has collabedit_T's that have not been applied.
+ */
+int collab_pendingedits(editqueue_T *queue) {
+  int pending = 0;
+  pthread_mutex_lock(&(queue->mutex));
+  pending = (queue->head != NULL);
+  pthread_mutex_unlock(&(queue->mutex));
+  return pending;
+}
+
+/*
  * When called, if there are pending edits to process, this will copy up to
  * "maxlen" characters of a special sequence into "buf". When the sequence is
  * read by vim's user input processor, it will trigger a call to 
- * collab_process. Seems a little hacky, but this is how vim processes special
+ * collab_applyedits. Seems a little hacky, but it's how vim processes special
  * events. This function should only be called from vim's main thread.
  * Returns the number of characters copied into the buffer.
  */
 int collab_inchar(char_u *buf, int maxlen, editqueue_T *queue) {
   // If not in the process of sending the complete sequence... 
-  if (next_key_index < 0) {
-    pthread_mutex_lock(&(queue->mutex));
-    if (queue->head) {
-      // There are pending edits, so the sequence should begin
-      next_key_index = 0;
-    }
-    pthread_mutex_unlock(&(queue->mutex));
+  if (next_key_index < 0 && collab_pendingedits(queue)) {
+    // There are pending edits, so the sequence should begin
+    next_key_index = 0;
   }
 
   int nkeys = 0;

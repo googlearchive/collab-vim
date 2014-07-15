@@ -30,6 +30,7 @@
 #endif
 
 #include "vim.h"
+#include "collab_structs.h"
 
 #ifdef FEAT_MZSCHEME
 # include "if_mzsch.h"
@@ -5056,7 +5057,12 @@ RealWaitForChar(fd, msec, check_for_gpm)
 		maxfd = nb_fd;
 	}
 #endif
-
+        if (collab_queue.event_read_fd != -1)
+        {
+            FD_SET(collab_queue.event_read_fd, &rfds);
+            if (maxfd < collab_queue.event_read_fd)
+                maxfd = collab_queue.event_read_fd;
+        }
 # ifdef OLD_VMS
 	/* Old VMS as v6.2 and older have broken select(). It waits more than
 	 * required. Should not be used */
@@ -5089,6 +5095,12 @@ RealWaitForChar(fd, msec, check_for_gpm)
 		sniff_request_waiting = 1;
 	}
 # endif
+        if (ret > 0 && FD_ISSET(collab_queue.event_read_fd, &rfds)) {
+            // Blocking inside the previous select call ended because of a
+            // Collaborative enqueue. Clear the contents of the event_read_fd.
+            char trash[100];
+            while (read(collab_queue.event_read_fd, trash, 100) > 0);
+        }
 # ifdef FEAT_XCLIPBOARD
 	if (ret > 0 && xterm_Shell != (Widget)0
 		&& FD_ISSET(ConnectionNumber(xterm_dpy), &rfds))
