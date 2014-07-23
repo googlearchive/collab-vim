@@ -26,6 +26,7 @@ int truncate_line __ARGS((int fixpos));
 void del_lines __ARGS((long nlines, int undo));
 int gchar_pos __ARGS((pos_T *pos));
 int gchar_cursor __ARGS((void));
+void pchar __ARGS((pos_T lp, int c));
 void pchar_cursor __ARGS((int c));
 int inindent __ARGS((int extra));
 char_u *skip_to_option_part __ARGS((char_u *p));

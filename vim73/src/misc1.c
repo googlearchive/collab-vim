@@ -2270,30 +2270,16 @@ del_bytes(count, fixpos_arg, use_delcombine)
     }
 
     /*
-     * If the old line has been allocated the deletion can be done in the
-     * existing line. Otherwise a new line has to be allocated
-     * Can't do this when using Netbeans, because we would need to invoke
-     * netbeans_removed(), which deallocates the line.  Let ml_replace() take
-     * care of notifying Netbeans.
+     * Always alloc a new line so that the collaborative event can syncronize
+     * before actually editing the buffer.
      */
-#ifdef FEAT_NETBEANS_INTG
-    if (netbeans_active())
-	was_alloced = FALSE;
-    else
-#endif
-	was_alloced = ml_line_alloced();    /* check if oldp was allocated */
-    if (was_alloced)
-	newp = oldp;			    /* use same allocated memory */
-    else
-    {					    /* need to allocate a new line */
-	newp = alloc((unsigned)(oldlen + 1 - count));
-	if (newp == NULL)
-	    return FAIL;
-	mch_memmove(newp, oldp, (size_t)col);
-    }
+    newp = alloc((unsigned)(oldlen + 1 - count));
+    if (newp == NULL)
+        return FAIL;
+    mch_memmove(newp, oldp, (size_t)col);
     mch_memmove(newp + col, oldp + col + count, (size_t)movelen);
-    if (!was_alloced)
-	ml_replace(lnum, newp, FALSE);
+    /* Replace the line to fire a collaborative event. */
+    ml_replace(lnum, newp, FALSE);
 
     /* mark the buffer as changed and prepare for displaying */
     changed_bytes(lnum, curwin->w_cursor.col);
@@ -2401,16 +2387,35 @@ gchar_cursor()
     return (int)*ml_get_cursor();
 }
 
+static void changedOneline __ARGS((buf_T *buf, linenr_T lnum));
+static void changed_lines_buf __ARGS((buf_T *buf, linenr_T lnum, linenr_T lnume, long xtra));
+static void changed_common __ARGS((linenr_T lnum, colnr_T col, linenr_T lnume, long xtra));
+
+/*
+ * Put character 'c' at position 'lp' in the current buffer.
+ */
+    void
+pchar(lp, c)
+    pos_T	lp;
+    int  	c;
+{
+    char_u *read_ln = ml_get(lp.lnum);
+    char_u *replaced = alloc(STRLEN(read_ln) + 1); // +1 for \0 byte
+    STRCPY(replaced, read_ln);
+    replaced[lp.col] = c;
+    ml_replace(lp.lnum, replaced, FALSE);
+
+    changedOneline(curbuf, lp.lnum);
+}
+
 /*
  * Write a character at the current cursor position.
- * It is directly written into the block.
  */
     void
 pchar_cursor(c)
     int c;
 {
-    *(ml_get_buf(curbuf, curwin->w_cursor.lnum, TRUE)
-						  + curwin->w_cursor.col) = c;
+    pchar(curwin->w_cursor, c);
 }
 
 /*
@@ -2519,10 +2524,6 @@ changed_int()
     need_maketitle = TRUE;	    /* set window title later */
 #endif
 }
-
-static void changedOneline __ARGS((buf_T *buf, linenr_T lnum));
-static void changed_lines_buf __ARGS((buf_T *buf, linenr_T lnum, linenr_T lnume, long xtra));
-static void changed_common __ARGS((linenr_T lnum, colnr_T col, linenr_T lnume, long xtra));
 
 /*
  * Changed bytes within a single line for the current buffer.

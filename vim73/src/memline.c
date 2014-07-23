@@ -47,6 +47,7 @@
 #endif
 
 #include "vim.h"
+#include "vim_pepper.h"
 
 #ifndef UNIX		/* it's in os_unix.h for Unix */
 # include <time.h>
@@ -2428,8 +2429,11 @@ ml_get_cursor()
 /*
  * get a pointer to a line in a specific buffer
  *
- * "will_change": if TRUE mark the buffer dirty (chars in the line will be
- * changed)
+ * For local collaborative event reasons, the file buffer should only be
+ * modified from other memline functions. Code should not directly change
+ * characters from the string returned.
+ *
+ * "will_change": if TRUE, crash the program. See above comment.
  */
     char_u  *
 ml_get_buf(buf, lnum, will_change)
@@ -2441,6 +2445,9 @@ ml_get_buf(buf, lnum, will_change)
     DATA_BL	*dp;
     char_u	*ptr;
     static int	recursive = 0;
+
+    /* Make sure no one can directly change the characters in the memline. */
+    assert(!will_change);
 
     if (lnum > buf->b_ml.ml_line_count)	/* invalid line number */
     {
@@ -3058,6 +3065,8 @@ ml_append_int(buf, lnum, line, len, newfile, mark)
 							   (char_u *)"\n", 1);
     }
 #endif
+    // TODO(zpotter): Sync and fire event before modifying buffer.
+    js_printf("ml_appended_int lnum=%d: '%s'", lnum, line);
     return OK;
 }
 
@@ -3102,6 +3111,8 @@ ml_replace(lnum, line, copy)
     curbuf->b_ml.ml_line_lnum = lnum;
     curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 
+    // TODO(zpotter): Sync and fire event before modifying buffer.
+    js_printf("ml_replace lnum=%d: '%s'", lnum, line);
     return OK;
 }
 
@@ -3278,6 +3289,9 @@ ml_delete_int(buf, lnum, message)
 #ifdef FEAT_BYTEOFF
     ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
 #endif
+
+    // TODO(zpotter): Sync and fire event before modifying buffer.
+    js_printf("ml_delete_int lnum=%d", lnum);
     return OK;
 }
 

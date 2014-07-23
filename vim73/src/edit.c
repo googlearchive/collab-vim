@@ -8528,13 +8528,17 @@ ins_bs(c, mode, inserted_space_p)
 		if (has_format_option(FO_AUTO)
 					   && has_format_option(FO_WHITE_PAR))
 		{
-		    char_u  *ptr = ml_get_buf(curbuf, curwin->w_cursor.lnum,
-									TRUE);
+		    char_u  *ptr = ml_get(curwin->w_cursor.lnum);
 		    int	    len;
 
 		    len = (int)STRLEN(ptr);
-		    if (len > 0 && ptr[len - 1] == ' ')
-			ptr[len - 1] = NUL;
+		    if (len > 0 && ptr[len - 1] == ' ') {
+		        pos_T colL = {
+		            .lnum = curwin->w_cursor.lnum,
+		            .col = len - 1
+		        };
+		        pchar(colL, NUL);
+		    }
 		}
 
 		(void)do_join(2, FALSE, FALSE);

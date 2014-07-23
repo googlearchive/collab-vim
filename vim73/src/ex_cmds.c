@@ -6000,8 +6000,8 @@ fix_help_buffer()
 		if (line[0] == '<')
 		{
 		    /* blank-out a '<' in the first column */
-		    line = ml_get_buf(curbuf, lnum, TRUE);
-		    line[0] = ' ';
+		    pos_T col0 = { .lnum = lnum, .col = 0 };
+		    pchar(col0, ' ');
 		}
 		in_example = FALSE;
 	    }
@@ -6010,15 +6010,15 @@ fix_help_buffer()
 		if (line[len - 1] == '>' && (len == 1 || line[len - 2] == ' '))
 		{
 		    /* blank-out a '>' in the last column (start of example) */
-		    line = ml_get_buf(curbuf, lnum, TRUE);
-		    line[len - 1] = ' ';
+		    pos_T colL = { .lnum = lnum, .col = len - 1 };
+		    pchar(colL, ' ');
 		    in_example = TRUE;
 		}
 		else if (line[len - 1] == '~')
 		{
 		    /* blank-out a '~' at the end of line (header marker) */
-		    line = ml_get_buf(curbuf, lnum, TRUE);
-		    line[len - 1] = ' ';
+		    pos_T colL = { .lnum = lnum, .col = len - 1 };
+		    pchar(colL, ' ');
 		}
 	    }
 	}
