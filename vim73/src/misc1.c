@@ -2099,26 +2099,22 @@ ins_char_bytes(buf, charlen)
 }
 
 /*
- * Insert a string at the cursor position.
+ * Insert a string at the position.
  * Note: Does NOT handle Replace mode.
  * Caller must have prepared for undo.
  */
     void
-ins_str(s)
-    char_u	*s;
+ins_pos_str(pos, s)
+    pos_T       pos;
+    char_u      *s;
 {
     char_u	*oldp, *newp;
     int		newlen = (int)STRLEN(s);
     int		oldlen;
     colnr_T	col;
-    linenr_T	lnum = curwin->w_cursor.lnum;
+    linenr_T	lnum = pos.lnum;
 
-#ifdef FEAT_VIRTUALEDIT
-    if (virtual_active() && curwin->w_cursor.coladd > 0)
-	coladvance_force(getviscol());
-#endif
-
-    col = curwin->w_cursor.col;
+    col = pos.col;
     oldp = ml_get(lnum);
     oldlen = (int)STRLEN(oldp);
 
@@ -2131,7 +2127,24 @@ ins_str(s)
     mch_memmove(newp + col + newlen, oldp + col, (size_t)(oldlen - col + 1));
     ml_replace(lnum, newp, FALSE);
     changed_bytes(lnum, col);
-    curwin->w_cursor.col += newlen;
+}
+
+/*
+ * Insert a string at the cursor position.
+ * Note: Does NOT handle Replace mode.
+ * Caller must have prepared for undo.
+ */
+    void
+ins_str(s)
+    char_u	*s;
+{
+#ifdef FEAT_VIRTUALEDIT
+    if (virtual_active() && curwin->w_cursor.coladd > 0)
+	coladvance_force(getviscol());
+#endif
+    ins_pos_str(curwin->w_cursor, s);
+    /* Adjust cursor for new length of line. */
+    curwin->w_cursor.col += STRLEN(s);
 }
 
 /*
@@ -2239,10 +2252,9 @@ del_bytes(count, fixpos_arg, use_delcombine)
 #endif
 
     /*
-     * When count is too big, reduce it.
+     * When attempting to delete past the end of the line, reduce count.
      */
-    movelen = (long)oldlen - (long)col - count + 1; /* includes trailing NUL */
-    if (movelen <= 1)
+    if (oldlen - col - count <= 0)
     {
 	/*
 	 * If we just took off the last character of a non-blank line, and
@@ -2266,23 +2278,38 @@ del_bytes(count, fixpos_arg, use_delcombine)
 #endif
 	}
 	count = oldlen - col;
-	movelen = 1;
     }
 
-    /*
-     * Always alloc a new line so that the collaborative event can syncronize
-     * before actually editing the buffer.
-     */
-    newp = alloc((unsigned)(oldlen + 1 - count));
+    pos_T pos = { .lnum = lnum, .col = col };
+    return del_pos_bytes(pos, count);
+}
+
+/*
+ * Delete "count" bytes from "pos".
+ * Does no bounds checking like the other function of the same name.
+ * Caller must have prepared for undo.
+ *
+ * return FAIL for failure, OK otherwise
+ */
+    int
+del_pos_bytes(pos, count)
+    pos_T       pos;
+    size_t      count;
+{
+    char_u *oldp = ml_get(pos.lnum);
+    size_t oldlen = STRLEN(oldp) + 1;
+    size_t movelen = oldlen - pos.col - count + 1; /* includes trailing NUL */
+
+    char_u *newp = alloc(oldlen + 1 - count);
     if (newp == NULL)
         return FAIL;
-    mch_memmove(newp, oldp, (size_t)col);
-    mch_memmove(newp + col, oldp + col + count, (size_t)movelen);
+    mch_memmove(newp, oldp, (size_t)pos.col);
+    mch_memmove(newp + pos.col, oldp + pos.col + count, movelen);
     /* Replace the line to fire a collaborative event. */
-    ml_replace(lnum, newp, FALSE);
+    ml_replace(pos.lnum, newp, FALSE);
 
     /* mark the buffer as changed and prepare for displaying */
-    changed_bytes(lnum, curwin->w_cursor.col);
+    changed_bytes(pos.lnum, pos.col);
 
     return OK;
 }

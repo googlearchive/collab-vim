@@ -79,10 +79,10 @@ static void* js_msgloop(void *unused) {
     ctext[mlen] = '\0'; // Null terminate the string var
 
     collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
-    edit->type = COLLAB_TEXT_INSERT;
+    edit->type = COLLAB_INSERT_TEXT;
     edit->file_buf = curbuf; 
-    edit->edit.text_insert.line = 0;
-    edit->edit.text_insert.text = ctext;
+    edit->insert_text.line = 0;
+    edit->insert_text.text = ctext;
 
     collab_enqueue(&collab_queue, edit);
     

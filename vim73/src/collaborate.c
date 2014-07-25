@@ -87,24 +87,47 @@ static void applyedit(collabedit_T *cedit) {
   // First select the right collaborative buffer
   buf_T *oldbuf = curbuf;
   if (curbuf != cedit->file_buf) set_curbuf(cedit->file_buf, DOBUF_GOTO);
-
   // Apply edit depending on type
   switch (cedit->type) {
-    case COLLAB_TEXT_DELETE:
-      // Delete the specified line from the buffer
-      ml_delete(cedit->edit.text_delete.line, 0);
-      // Update cursor and mark for redraw
-      deleted_lines_mark(cedit->edit.text_delete.line, 1);
+    case COLLAB_APPEND_LINE:
+      // Add the new line to the buffer.
+      ml_append(cedit->append_line.line, cedit->append_line.text, 0, FALSE);
+      // Update cursor and mark for redraw.
+      // Just appended a line below append_line.line
+      appended_lines_mark(cedit->append_line.line, 1);
+      // Free append_line data.
+      free(cedit->append_line.text);
       break;
 
-    case COLLAB_TEXT_INSERT:
-      // Add the new line to the buffer
-      ml_append(cedit->edit.text_insert.line, cedit->edit.text_insert.text, 0, FALSE);
-      // Update cursor and mark for redraw.
-      // Just appended a line below text_insert.line
-      appended_lines_mark(cedit->edit.text_insert.line, 1);
-      // Free up union specifics
-      free(cedit->edit.text_insert.text);
+    case COLLAB_INSERT_TEXT:
+    { // Define scope for case variables.
+      // TODO(zpotter) adjust char index to utf8 byte index
+      pos_T ins_pos = { .lnum = cedit->insert_text.line, .col = cedit->insert_text.index };
+      // Insert text at ins_pos.
+      ins_pos_str(ins_pos, cedit->insert_text.text);
+      // Free insert_text data.
+      free(cedit->insert_text.text);
+      break;
+    }
+
+    case COLLAB_REMOVE_LINE:
+      // Delete the specified line from the buffer
+      ml_delete(cedit->remove_line.line, 0);
+      // Update cursor and mark for redraw
+      deleted_lines_mark(cedit->remove_line.line, 1);
+      break;
+
+    case COLLAB_DELETE_TEXT:
+    { // Define scope for case variables.
+      // TODO(zpotter) adjust char index to utf8 byte index
+      pos_T del_pos = { .lnum = cedit->delete_text.line, .col = cedit->delete_text.index };
+      // Delete text at del_pos.
+      del_pos_bytes(del_pos, cedit->delete_text.length);
+      break;
+    }
+
+    case COLLAB_REPLACE_LINE:
+      // An outgoing event. Should not see this case.
       break;
   }
   // Switch back to old buffer if necessary 
