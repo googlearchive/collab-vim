@@ -13,6 +13,8 @@
 #include <pthread.h>
 
 #include "ppapi/c/ppb_messaging.h"
+#include "ppapi/c/ppb_var.h"
+#include "ppapi/c/ppb_var_dictionary.h"
 #include "ppapi_simple/ps.h"
 #include "ppapi_simple/ps_event.h"
 #include "ppapi_simple/ps_interface.h"
@@ -21,6 +23,16 @@
 #include "vim.h"
 #include "vim_pepper.h"
 #include "collab_structs.h"
+
+/*
+ * Strings for each collabtype_T used in parsing messages from JS.
+ */
+static const char * const type_str = "collabedit_type";
+static const char * const type_append_line = "append_line";
+static const char * const type_insert_text = "insert_text";
+static const char * const type_remove_line = "remove_line";
+static const char * const type_delete_text = "delete_text";
+static const char * const type_replace_line = "replace_line";
 
 /*
  * Defined in main.c, vim's own main method.
@@ -56,38 +68,108 @@ static int setup_unix_environment(const char* tarfile) {
 }
 
 /*
+ * A macro to convert a null-terminated C string to a PP_Var.
+ */
+#define UTF8_TO_VAR(ppb_var_interface, str) \
+  ppb_var_interface->VarFromUtf8(str, strlen(str))
+
+/*
+ * Returns a null-terminated C string converted from a string PP_Var.
+ */
+static char* var_to_cstr(const PPB_Var *ppb_var, struct PP_Var str_var) {
+  const char *vstr;
+  uint32_t var_len;
+  vstr = ppb_var->VarToUtf8(str_var, &var_len);
+  char *cstr = malloc(var_len + 1); // +1 for null char
+  strncpy(cstr, vstr, var_len);
+  cstr[var_len] = '\0'; // Null terminate the string
+  return cstr;
+}
+
+/*
  * Waits for and handles all JS -> NaCL messages.
  * Unused parameter so this function can be used with pthreads. It seems that
  * pnacl-clang doesn't like unnamed parameters.
  */
 static void* js_msgloop(void *unused) {
+  // Get the interface variables for manipulating PP_Vars.
+  const PPB_Var *ppb_var = PSGetInterface(PPB_VAR_INTERFACE);
+  const PPB_VarDictionary *ppb_dict = PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
   PSEvent* event;
   
+  // Check for broken interfaces.
+  if (ppb_var == NULL || ppb_dict == NULL) {
+    // TODO(zpotter): Handle interface failure.
+    js_printf("error: Failed to get PPB var/dictionary interface.");
+    return NULL;
+  }
+
+  // PP_Vars used as keys to data in PP_Var dictionaries.
+  const struct PP_Var type_key = UTF8_TO_VAR(ppb_var, type_str);
+  const struct PP_Var line_key = UTF8_TO_VAR(ppb_var, "line");
+  const struct PP_Var text_key = UTF8_TO_VAR(ppb_var, "text");
+  const struct PP_Var index_key = UTF8_TO_VAR(ppb_var, "index");
+  const struct PP_Var length_key = UTF8_TO_VAR(ppb_var, "length");
+
+  // Filter to all JS messages.
   PSEventSetFilter(PSE_INSTANCE_HANDLEMESSAGE);
   while (1) {
-    // TODO(zpotter): Right now, incoming messages that are strings are assumed
-    // to be text inserts for simplicity. Figure out best way to model realtime
-    // events.
+    // Wait for the next event.
     event = PSEventWaitAcquire();
-    if (event->as_var.type != PP_VARTYPE_STRING) continue;
+    struct PP_Var dict = event->as_var;
+    // Ignore anything that isn't a dictionary representing a collabedit.
+    if (dict.type != PP_VARTYPE_DICTIONARY ||
+        !ppb_dict->HasKey(dict, type_key)) {
+      // TODO(zpotter): PSEventRelease here? Or does another handler get the message next?
+      js_printf("info: msgloop skipping non collabedit dict");
+      continue;
+    }
 
-    const char *message;
-    uint32_t mlen;
-    message = PSInterfaceVar()->VarToUtf8(event->as_var, &mlen);
-    char_u *ctext = (char_u *) malloc(mlen + 1); // +1 for null char
-    memcpy(ctext, message, mlen);
-    ctext[mlen] = '\0'; // Null terminate the string var
-
+    //  Create a collabedit_T to later enqueue and apply.
     collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
-    edit->type = COLLAB_INSERT_TEXT;
     edit->file_buf = curbuf; 
-    edit->insert_text.line = 0;
-    edit->insert_text.text = ctext;
 
-    collab_enqueue(&collab_queue, edit);
+    // Parse the specific type of collabedit.
+    char *var_type = var_to_cstr(ppb_var, ppb_dict->Get(dict, type_key));
+    if (strcmp(var_type, type_append_line) == 0) {
+      edit->type = COLLAB_APPEND_LINE;
+      edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+      edit->append_line.text = (char_u *)var_to_cstr(ppb_var, ppb_dict->Get(dict, text_key));
+
+    } else if (strcmp(var_type, type_insert_text) == 0) {
+      edit->type = COLLAB_INSERT_TEXT;
+      edit->insert_text.line = ppb_dict->Get(dict, line_key).value.as_int;
+      edit->insert_text.index = ppb_dict->Get(dict, index_key).value.as_int;
+      edit->insert_text.text = (char_u *)var_to_cstr(ppb_var, ppb_dict->Get(dict, text_key));
+
+    } else if (strcmp(var_type, type_remove_line) == 0) {
+      edit->type = COLLAB_REMOVE_LINE;
+      edit->remove_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+
+    } else if (strcmp(var_type, type_delete_text) == 0) {
+      edit->type = COLLAB_DELETE_TEXT;
+      edit->delete_text.line = ppb_dict->Get(dict, line_key).value.as_int;
+      edit->delete_text.index = ppb_dict->Get(dict, index_key).value.as_int;
+      edit->delete_text.length = ppb_dict->Get(dict, length_key).value.as_int;
+
+    } else if (strcmp(var_type, type_replace_line) == 0) {
+      edit->type = COLLAB_REPLACE_LINE;
+      edit->replace_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+      edit->replace_line.text = (char_u *)var_to_cstr(ppb_var, ppb_dict->Get(dict, text_key));
+
+    } else {
+      js_printf("info: msgloop unknown collabedit type");
+      // Unknown collabtype_T
+      free(edit);
+      edit = NULL;
+    }
     
+    // Enqueue the edit for processing from the main thread.
+    if (edit != NULL)
+      collab_enqueue(&collab_queue, edit);
     PSEventRelease(event);
   } 
+  // Never reached.
   return NULL;
 }
 

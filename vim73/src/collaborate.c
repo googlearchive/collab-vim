@@ -90,12 +90,12 @@ static void applyedit(collabedit_T *cedit) {
   // Apply edit depending on type
   switch (cedit->type) {
     case COLLAB_APPEND_LINE:
-      // Add the new line to the buffer.
       ml_append(cedit->append_line.line, cedit->append_line.text, 0, FALSE);
-      // Update cursor and mark for redraw.
-      // Just appended a line below append_line.line
+      // Adjust cursor position.
+      if (curwin->w_cursor.lnum > cedit->append_line.line)
+        curwin->w_cursor.lnum++;
+      // Mark lines for redraw. Just appended a line below append_line.line
       appended_lines_mark(cedit->append_line.line, 1);
-      // Free append_line data.
       free(cedit->append_line.text);
       break;
 
@@ -103,17 +103,21 @@ static void applyedit(collabedit_T *cedit) {
     { // Define scope for case variables.
       // TODO(zpotter) adjust char index to utf8 byte index
       pos_T ins_pos = { .lnum = cedit->insert_text.line, .col = cedit->insert_text.index };
-      // Insert text at ins_pos.
       ins_pos_str(ins_pos, cedit->insert_text.text);
-      // Free insert_text data.
+      // Adjust cursor position.
+      if (curwin->w_cursor.lnum == ins_pos.lnum &&
+          curwin->w_cursor.col >= ins_pos.col)
+        curwin->w_cursor.col += STRLEN(cedit->insert_text.text);
       free(cedit->insert_text.text);
       break;
     }
 
     case COLLAB_REMOVE_LINE:
-      // Delete the specified line from the buffer
       ml_delete(cedit->remove_line.line, 0);
-      // Update cursor and mark for redraw
+      // Adjust cursor position.
+      if (curwin->w_cursor.lnum > cedit->remove_line.line)
+        curwin->w_cursor.lnum--;
+      // Mark line for redraw.
       deleted_lines_mark(cedit->remove_line.line, 1);
       break;
 
@@ -121,19 +125,27 @@ static void applyedit(collabedit_T *cedit) {
     { // Define scope for case variables.
       // TODO(zpotter) adjust char index to utf8 byte index
       pos_T del_pos = { .lnum = cedit->delete_text.line, .col = cedit->delete_text.index };
-      // Delete text at del_pos.
       del_pos_bytes(del_pos, cedit->delete_text.length);
+      // Adjust cursor position.
+      if (curwin->w_cursor.lnum == del_pos.lnum &&
+          curwin->w_cursor.col >= del_pos.col) {
+        if (curwin->w_cursor.col < del_pos.col + cedit->delete_text.length) {
+          curwin->w_cursor.col = del_pos.col;
+        } else {
+          curwin->w_cursor.col -= cedit->delete_text.length;
+        }
+      }
       break;
     }
 
     case COLLAB_REPLACE_LINE:
       // An outgoing event. Should not see this case.
+      js_printf("info: applyedit unexpected COLLAB_REPLACE_LINE edit");
       break;
   }
-  // Switch back to old buffer if necessary 
+  // Switch back to old buffer if necessary.
   if (curbuf != oldbuf) set_curbuf(oldbuf, DOBUF_GOTO);
-
-  // Done with collabedit_T, so free it
+  // Done with collabedit_T, so free it.
   free(cedit);
 }
 
