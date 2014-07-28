@@ -47,7 +47,7 @@
 #endif
 
 #include "vim.h"
-#include "vim_pepper.h"
+#include "collab_structs.h"
 
 #ifndef UNIX		/* it's in os_unix.h for Unix */
 # include <time.h>
@@ -3065,8 +3065,14 @@ ml_append_int(buf, lnum, line, len, newfile, mark)
 							   (char_u *)"\n", 1);
     }
 #endif
-    // TODO(zpotter): Sync and fire event before modifying buffer.
-    js_printf("ml_appended_int lnum=%d: '%s'", lnum, line);
+    /* Send the local edit to the remote collaborators. */
+    collabedit_T append_edit = {
+        .type = COLLAB_APPEND_LINE,
+        .file_buf = curbuf,
+        .append_line.line = lnum,
+        .append_line.text = line
+    };
+    collab_remoteapply(&append_edit);
     return OK;
 }
 
@@ -3111,8 +3117,14 @@ ml_replace(lnum, line, copy)
     curbuf->b_ml.ml_line_lnum = lnum;
     curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 
-    // TODO(zpotter): Sync and fire event before modifying buffer.
-    js_printf("ml_replace lnum=%d: '%s'", lnum, line);
+    /* Send the local edit to the remote collaborators. */
+    collabedit_T replace_edit = {
+        .type = COLLAB_REPLACE_LINE,
+        .file_buf = curbuf,
+        .replace_line.line = lnum,
+        .replace_line.text = line
+    };
+    collab_remoteapply(&replace_edit);
     return OK;
 }
 
@@ -3289,9 +3301,13 @@ ml_delete_int(buf, lnum, message)
 #ifdef FEAT_BYTEOFF
     ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
 #endif
-
-    // TODO(zpotter): Sync and fire event before modifying buffer.
-    js_printf("ml_delete_int lnum=%d", lnum);
+    /* Send the local edit to the remote collaborators. */
+    collabedit_T remove_edit = {
+        .type = COLLAB_REMOVE_LINE,
+        .file_buf = curbuf,
+        .remove_line.line = lnum,
+    };
+    collab_remoteapply(&remove_edit);
     return OK;
 }
 

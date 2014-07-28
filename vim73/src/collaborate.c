@@ -31,6 +31,12 @@ static const size_t collab_keys_length =
 static int next_key_index = -1;
 
 /*
+ * Sends a local user edit to remote collaborators.
+ * Implementation is specific to collaborative backend.
+ */
+extern void collab_remoteapply(collabedit_T *edit);
+
+/*
  * Called from vim's main() before the main loop begins. Sets up data that
  * needs some configuration.
  */
