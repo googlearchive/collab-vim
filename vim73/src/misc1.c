@@ -2102,11 +2102,14 @@ ins_char_bytes(buf, charlen)
  * Insert a string at the position.
  * Note: Does NOT handle Replace mode.
  * Caller must have prepared for undo.
+ *
+ *  fire_event: TRUE to send remote collaborators a collaborative event.
  */
     void
-ins_pos_str(pos, s)
+ins_str_collab(pos, s, fire_event)
     pos_T       pos;
     char_u      *s;
+    int         fire_event;
 {
     char_u	*oldp, *newp;
     int		newlen = (int)STRLEN(s);
@@ -2125,12 +2128,13 @@ ins_pos_str(pos, s)
 	mch_memmove(newp, oldp, (size_t)col);
     mch_memmove(newp + col, s, (size_t)newlen);
     mch_memmove(newp + col + newlen, oldp + col, (size_t)(oldlen - col + 1));
-    ml_replace(lnum, newp, FALSE);
+    ml_replace_collab(lnum, newp, FALSE, fire_event);
     changed_bytes(lnum, col);
 }
 
 /*
  * Insert a string at the cursor position.
+ * Automatically sends local edits to remote collaborators.
  * Note: Does NOT handle Replace mode.
  * Caller must have prepared for undo.
  */
@@ -2142,7 +2146,7 @@ ins_str(s)
     if (virtual_active() && curwin->w_cursor.coladd > 0)
 	coladvance_force(getviscol());
 #endif
-    ins_pos_str(curwin->w_cursor, s);
+    ins_str_collab(curwin->w_cursor, s, TRUE);
     /* Adjust cursor for new length of line. */
     curwin->w_cursor.col += STRLEN(s);
 }
@@ -2200,6 +2204,8 @@ del_chars(count, fixpos)
  * Delete "count" bytes under the cursor.
  * If "fixpos" is TRUE, don't leave the cursor on the NUL after the line.
  * Caller must have prepared for undo.
+ *
+ * Automatically sends local edits to remote collaborators.
  *
  * return FAIL for failure, OK otherwise
  */
@@ -2281,20 +2287,23 @@ del_bytes(count, fixpos_arg, use_delcombine)
     }
 
     pos_T pos = { .lnum = lnum, .col = col };
-    return del_pos_bytes(pos, count);
+    return del_bytes_collab(pos, count, TRUE);
 }
 
 /*
  * Delete "count" bytes from "pos".
- * Does no bounds checking like the other function of the same name.
+ * Does no bounds checking like del_bytes.
  * Caller must have prepared for undo.
  *
  * return FAIL for failure, OK otherwise
+ *
+ *  fire_event: TRUE to send remote collaborators a collaborative event.
  */
     int
-del_pos_bytes(pos, count)
+del_bytes_collab(pos, count, fire_event)
     pos_T       pos;
     size_t      count;
+    int         fire_event;
 {
     char_u *oldp = ml_get(pos.lnum);
     size_t oldlen = STRLEN(oldp) + 1;
@@ -2306,7 +2315,7 @@ del_pos_bytes(pos, count)
     mch_memmove(newp, oldp, (size_t)pos.col);
     mch_memmove(newp + pos.col, oldp + pos.col + count, movelen);
     /* Replace the line to fire a collaborative event. */
-    ml_replace(pos.lnum, newp, FALSE);
+    ml_replace_collab(pos.lnum, newp, FALSE, fire_event);
 
     /* mark the buffer as changed and prepare for displaying */
     changed_bytes(pos.lnum, pos.col);

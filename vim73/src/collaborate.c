@@ -96,7 +96,7 @@ static void applyedit(collabedit_T *cedit) {
   // Apply edit depending on type
   switch (cedit->type) {
     case COLLAB_APPEND_LINE:
-      ml_append(cedit->append_line.line, cedit->append_line.text, 0, FALSE);
+      ml_append_collab(cedit->append_line.line, cedit->append_line.text, 0, FALSE, FALSE);
       // Adjust cursor position.
       if (curwin->w_cursor.lnum > cedit->append_line.line)
         curwin->w_cursor.lnum++;
@@ -109,7 +109,7 @@ static void applyedit(collabedit_T *cedit) {
     { // Define scope for case variables.
       // TODO(zpotter) adjust char index to utf8 byte index
       pos_T ins_pos = { .lnum = cedit->insert_text.line, .col = cedit->insert_text.index };
-      ins_pos_str(ins_pos, cedit->insert_text.text);
+      ins_str_collab(ins_pos, cedit->insert_text.text, FALSE);
       // Adjust cursor position.
       if (curwin->w_cursor.lnum == ins_pos.lnum &&
           curwin->w_cursor.col >= ins_pos.col)
@@ -119,7 +119,7 @@ static void applyedit(collabedit_T *cedit) {
     }
 
     case COLLAB_REMOVE_LINE:
-      ml_delete(cedit->remove_line.line, 0);
+      ml_delete_collab(cedit->remove_line.line, 0, FALSE);
       // Adjust cursor position.
       if (curwin->w_cursor.lnum > cedit->remove_line.line)
         curwin->w_cursor.lnum--;
@@ -131,7 +131,7 @@ static void applyedit(collabedit_T *cedit) {
     { // Define scope for case variables.
       // TODO(zpotter) adjust char index to utf8 byte index
       pos_T del_pos = { .lnum = cedit->delete_text.line, .col = cedit->delete_text.index };
-      del_pos_bytes(del_pos, cedit->delete_text.length);
+      del_bytes_collab(del_pos, cedit->delete_text.length, FALSE);
       // Adjust cursor position.
       if (curwin->w_cursor.lnum == del_pos.lnum &&
           curwin->w_cursor.col >= del_pos.col) {

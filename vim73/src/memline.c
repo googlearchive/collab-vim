@@ -246,8 +246,8 @@ static void add_b0_fenc __ARGS((ZERO_BL *b0p, buf_T *buf));
 #endif
 static time_t swapfile_info __ARGS((char_u *));
 static int recov_file_names __ARGS((char_u **, char_u *, int prepend_dot));
-static int ml_append_int __ARGS((buf_T *, linenr_T, char_u *, colnr_T, int, int));
-static int ml_delete_int __ARGS((buf_T *, linenr_T, int));
+static int ml_append_int __ARGS((buf_T *, linenr_T, char_u *, colnr_T, int, int, int));
+static int ml_delete_int __ARGS((buf_T *, linenr_T, int, int));
 static char_u *findswapname __ARGS((buf_T *, char_u **, char_u *));
 static void ml_flush_line __ARGS((buf_T *));
 static bhdr_T *ml_new_data __ARGS((memfile_T *, int, int));
@@ -2525,6 +2525,8 @@ ml_line_alloced()
  * "line" does not need to be allocated, but can't be another line in a
  * buffer, unlocking may make it invalid.
  *
+ * Automatically sends local edits to remote collaborators.
+ *
  *   newfile: TRUE when starting to edit a new file, meaning that pe_old_lnum
  *		will be set for recovery
  * Check: The caller of this function should probably also call
@@ -2539,13 +2541,29 @@ ml_append(lnum, line, len, newfile)
     colnr_T	len;		/* length of new line, including NUL, or 0 */
     int		newfile;	/* flag, see above */
 {
+    return ml_append_collab(lnum, line, len, newfile, TRUE);
+}
+
+/*
+ * Same as ml_append, but with the option to fire a collaborative event.
+ *
+ *   fire_event: TRUE to send remote collaborators a local edit event.
+ */
+    int
+ml_append_collab(lnum, line, len, newfile, fire_event)
+    linenr_T    lnum;		/* append after this line (can be 0) */
+    char_u      *line;		/* text of the new line */
+    colnr_T     len;		/* length of new line, including NUL, or 0 */
+    int         newfile;	/* flag, see above */
+    int         fire_event;	/* fire an edit event to collaborators */
+{
     /* When starting up, we might still need to create the memfile */
     if (curbuf->b_ml.ml_mfp == NULL && open_buffer(FALSE, NULL, 0) == FAIL)
 	return FAIL;
 
     if (curbuf->b_ml.ml_line_lnum != 0)
 	ml_flush_line(curbuf);
-    return ml_append_int(curbuf, lnum, line, len, newfile, FALSE);
+    return ml_append_int(curbuf, lnum, line, len, newfile, FALSE, fire_event);
 }
 
 #if defined(FEAT_SPELL) || defined(PROTO)
@@ -2566,18 +2584,19 @@ ml_append_buf(buf, lnum, line, len, newfile)
 
     if (buf->b_ml.ml_line_lnum != 0)
 	ml_flush_line(buf);
-    return ml_append_int(buf, lnum, line, len, newfile, FALSE);
+    return ml_append_int(buf, lnum, line, len, newfile, FALSE, TRUE);
 }
 #endif
 
     static int
-ml_append_int(buf, lnum, line, len, newfile, mark)
+ml_append_int(buf, lnum, line, len, newfile, mark, fire_event)
     buf_T	*buf;
     linenr_T	lnum;		/* append after this line (can be 0) */
     char_u	*line;		/* text of the new line */
     colnr_T	len;		/* length of line, including NUL, or 0 */
     int		newfile;	/* flag, see above */
     int		mark;		/* mark the new line */
+    int 	fire_event;	/* fire an edit event to collaborators */
 {
     int		i;
     int		line_count;	/* number of indexes in current block */
@@ -3065,14 +3084,16 @@ ml_append_int(buf, lnum, line, len, newfile, mark)
 							   (char_u *)"\n", 1);
     }
 #endif
-    /* Send the local edit to the remote collaborators. */
-    collabedit_T append_edit = {
-        .type = COLLAB_APPEND_LINE,
-        .file_buf = curbuf,
-        .append_line.line = lnum,
-        .append_line.text = line
-    };
-    collab_remoteapply(&append_edit);
+    if (fire_event) {
+        /* Send the local edit to the remote collaborators. */
+        collabedit_T append_edit = {
+            .type = COLLAB_APPEND_LINE,
+            .file_buf = buf,
+            .append_line.line = lnum,
+            .append_line.text = line
+        };
+        collab_remoteapply(&append_edit);
+    }
     return OK;
 }
 
@@ -3081,6 +3102,8 @@ ml_append_int(buf, lnum, line, len, newfile, mark)
  *
  * If "copy" is TRUE, make a copy of the line, otherwise the line has been
  * copied to allocated memory already.
+ *
+ * Automatically sends local edits to remote collaborators.
  *
  * Check: The caller of this function should probably also call
  * changed_lines(), unless update_screen(NOT_VALID) is used.
@@ -3092,6 +3115,22 @@ ml_replace(lnum, line, copy)
     linenr_T	lnum;
     char_u	*line;
     int		copy;
+{
+    return ml_replace_collab(lnum, line, copy, TRUE);
+}
+
+/*
+ * Same as ml_replace, but with the option to fire a collaborative event.
+ *
+ *   fire_event: TRUE to send remote collaborators a local edit event.
+ */
+
+    int
+ml_replace_collab(lnum, line, copy, fire_event)
+    linenr_T	lnum;
+    char_u	*line;
+    int		copy;
+    int		fire_event;
 {
     if (line == NULL)		/* just checking... */
 	return FAIL;
@@ -3117,20 +3156,24 @@ ml_replace(lnum, line, copy)
     curbuf->b_ml.ml_line_lnum = lnum;
     curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 
-    /* Send the local edit to the remote collaborators. */
-    collabedit_T replace_edit = {
-        .type = COLLAB_REPLACE_LINE,
-        .file_buf = curbuf,
-        .replace_line.line = lnum,
-        .replace_line.text = line
-    };
-    collab_remoteapply(&replace_edit);
+    if (fire_event) {
+        /* Send the local edit to the remote collaborators. */
+        collabedit_T replace_edit = {
+            .type = COLLAB_REPLACE_LINE,
+            .file_buf = curbuf,
+            .replace_line.line = lnum,
+            .replace_line.text = line
+        };
+        collab_remoteapply(&replace_edit);
+    }
     return OK;
 }
 
 /*
  * Delete line 'lnum' in the current buffer.
  *
+ * Automatically sends local edits to remote collaborators.
+ * 
  * Check: The caller of this function should probably also call
  * deleted_lines() after this.
  *
@@ -3141,15 +3184,30 @@ ml_delete(lnum, message)
     linenr_T	lnum;
     int		message;
 {
+    return ml_delete_collab(lnum, message, TRUE);
+}
+
+/*
+ * Same as ml_delete, but with the option to fire a collaborative event.
+ *
+ *   fire_event: TRUE to send remote collaborators a local edit event.
+ */
+    int
+ml_delete_collab(lnum, message, fire_event)
+    linenr_T	lnum;
+    int		message;
+    int		fire_event;
+{
     ml_flush_line(curbuf);
-    return ml_delete_int(curbuf, lnum, message);
+    return ml_delete_int(curbuf, lnum, message, fire_event);
 }
 
     static int
-ml_delete_int(buf, lnum, message)
+ml_delete_int(buf, lnum, message, fire_event)
     buf_T	*buf;
     linenr_T	lnum;
     int		message;
+    int		fire_event;
 {
     bhdr_T	*hp;
     memfile_T	*mfp;
@@ -3301,13 +3359,15 @@ ml_delete_int(buf, lnum, message)
 #ifdef FEAT_BYTEOFF
     ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
 #endif
-    /* Send the local edit to the remote collaborators. */
-    collabedit_T remove_edit = {
-        .type = COLLAB_REMOVE_LINE,
-        .file_buf = curbuf,
-        .remove_line.line = lnum,
-    };
-    collab_remoteapply(&remove_edit);
+    if (fire_event) {
+        /* Send the local edit to the remote collaborators. */
+        collabedit_T remove_edit = {
+            .type = COLLAB_REMOVE_LINE,
+            .file_buf = buf,
+            .remove_line.line = lnum,
+        };
+        collab_remoteapply(&remove_edit);
+    }
     return OK;
 }
 
@@ -3521,8 +3581,8 @@ ml_flush_line(buf)
 		 */
 		/* How about handling errors??? */
 		(void)ml_append_int(buf, lnum, new_line, new_len, FALSE,
-					     (dp->db_index[idx] & DB_MARKED));
-		(void)ml_delete_int(buf, lnum, FALSE);
+					     (dp->db_index[idx] & DB_MARKED), FALSE);
+		(void)ml_delete_int(buf, lnum, FALSE, FALSE);
 	    }
 	}
 	vim_free(new_line);
