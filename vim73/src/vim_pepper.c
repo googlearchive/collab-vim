@@ -113,84 +113,8 @@ static int pp_strcmp(const struct PP_Var v1, const struct PP_Var v2) {
   return cmp;
 }
 
-/*
- * Waits for and handles all JS -> NaCL messages.
- * Unused parameter so this function can be used with pthreads. It seems that
- * pnacl-clang doesn't like unnamed parameters.
- */
-static void* js_msgloop(void *unused) {
-  // Filter to all JS messages.
-  PSEventSetFilter(PSE_INSTANCE_HANDLEMESSAGE);
-  PSEvent* event;
-  while (1) {
-    // Wait for the next event.
-    event = PSEventWaitAcquire();
-    struct PP_Var dict = event->as_var;
-    // Ignore anything that isn't a dictionary representing a collabedit.
-    if (dict.type != PP_VARTYPE_DICTIONARY ||
-        !ppb_dict->HasKey(dict, type_key)) {
-      // TODO(zpotter): PSEventRelease here? Or does another handler get the message next?
-      js_printf("info: msgloop skipping non collabedit dict");
-      continue;
-    }
-
-    //  Create a collabedit_T to later enqueue and apply.
-    collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
-    edit->file_buf = curbuf; // TODO(zpotter): Set actual buffer
-
-    // Parse the specific type of collabedit.
-    struct PP_Var var_type = ppb_dict->Get(dict, type_key);
-    if (pp_strcmp(var_type, type_append_line) == 0) {
-      edit->type = COLLAB_APPEND_LINE;
-      edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-      edit->append_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
-
-    } else if (pp_strcmp(var_type, type_insert_text) == 0) {
-      edit->type = COLLAB_INSERT_TEXT;
-      edit->insert_text.line = ppb_dict->Get(dict, line_key).value.as_int;
-      edit->insert_text.index = ppb_dict->Get(dict, index_key).value.as_int;
-      edit->insert_text.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
-
-    } else if (pp_strcmp(var_type, type_remove_line) == 0) {
-      edit->type = COLLAB_REMOVE_LINE;
-      edit->remove_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-
-    } else if (pp_strcmp(var_type, type_delete_text) == 0) {
-      edit->type = COLLAB_DELETE_TEXT;
-      edit->delete_text.line = ppb_dict->Get(dict, line_key).value.as_int;
-      edit->delete_text.index = ppb_dict->Get(dict, index_key).value.as_int;
-      edit->delete_text.length = ppb_dict->Get(dict, length_key).value.as_int;
-
-    } else if (pp_strcmp(var_type, type_replace_line) == 0) {
-      edit->type = COLLAB_REPLACE_LINE;
-      edit->replace_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-      edit->replace_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
-
-    } else {
-      // Unknown collabtype_T
-      js_printf("info: msgloop unknown collabedit type");
-      free(edit);
-      edit = NULL;
-    }
-    
-    // Enqueue the edit for processing from the main thread.
-    if (edit != NULL)
-      collab_enqueue(&collab_queue, edit);
-    PSEventRelease(event);
-  } 
-  // Never reached.
-  return NULL;
-}
-
-/*
- * Function prototype declared in proto/collaborate.pro, extern decleration
- * in collaborate.c.
- *
- * This implementation of the function sends collabedits to the Drive Realtime
- * model via Pepper messaging.
- */
-void collab_remoteapply(collabedit_T *edit) {
-  // Turn edit into a PP_Var.
+// Create a PP_Var from a collabedit_T.
+struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
   struct PP_Var dict = ppb_dict->Create();
   // TODO(zpotter): set file_buf
   switch (edit->type) {
@@ -221,19 +145,96 @@ void collab_remoteapply(collabedit_T *edit) {
       ppb_dict->Set(dict, text_key, UTF8_TO_VAR((char *)edit->replace_line.text));
       break;
   }
+  return dict;
+}
+
+// Create a collabedit_T from a PP_Var
+collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
+  // Ignore anything that isn't a dictionary representing a collabedit.
+  if (dict.type != PP_VARTYPE_DICTIONARY ||
+      !ppb_dict->HasKey(dict, type_key)) {
+    return NULL;
+  }
+
+  //  Create a collabedit_T to represent the edit. 
+  collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
+  edit->file_buf = curbuf; // TODO(zpotter): Set actual buffer
+
+  // Parse the specific type of collabedit.
+  struct PP_Var var_type = ppb_dict->Get(dict, type_key);
+  if (pp_strcmp(var_type, type_append_line) == 0) {
+    edit->type = COLLAB_APPEND_LINE;
+    edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+    edit->append_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+
+  } else if (pp_strcmp(var_type, type_insert_text) == 0) {
+    edit->type = COLLAB_INSERT_TEXT;
+    edit->insert_text.line = ppb_dict->Get(dict, line_key).value.as_int;
+    edit->insert_text.index = ppb_dict->Get(dict, index_key).value.as_int;
+    edit->insert_text.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+
+  } else if (pp_strcmp(var_type, type_remove_line) == 0) {
+    edit->type = COLLAB_REMOVE_LINE;
+    edit->remove_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+
+  } else if (pp_strcmp(var_type, type_delete_text) == 0) {
+    edit->type = COLLAB_DELETE_TEXT;
+    edit->delete_text.line = ppb_dict->Get(dict, line_key).value.as_int;
+    edit->delete_text.index = ppb_dict->Get(dict, index_key).value.as_int;
+    edit->delete_text.length = ppb_dict->Get(dict, length_key).value.as_int;
+
+  } else if (pp_strcmp(var_type, type_replace_line) == 0) {
+    edit->type = COLLAB_REPLACE_LINE;
+    edit->replace_line.line = ppb_dict->Get(dict, line_key).value.as_int;
+    edit->replace_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+
+  } else {
+    // Unknown collabtype_T
+    free(edit);
+    edit = NULL;
+  }
+  return edit;
+}
+
+/*
+ * Waits for and handles all JS -> NaCL messages.
+ * Unused parameter so this function can be used with pthreads. It seems that
+ * pnacl-clang doesn't like unnamed parameters.
+ */
+static void* js_msgloop(void *unused) {
+  // Filter to all JS messages.
+  PSEventSetFilter(PSE_INSTANCE_HANDLEMESSAGE);
+  PSEvent* event;
+  while (1) {
+    // Wait for the next event.
+    event = PSEventWaitAcquire();
+    collabedit_T *edit = collabedit_from_ppvar(event->as_var);
+    // Enqueue the edit for processing from the main thread.
+    if (edit != NULL)
+      collab_enqueue(&collab_queue, edit);
+    PSEventRelease(event);
+  } 
+  // Never reached.
+  return NULL;
+}
+
+/*
+ * Function prototype declared in proto/collaborate.pro, extern decleration
+ * in collaborate.c.
+ *
+ * This implementation of the function sends collabedits to the Drive Realtime
+ * model via Pepper messaging.
+ */
+void collab_remoteapply(collabedit_T *edit) {
+  // Turn edit into a PP_Var.
+  struct PP_Var dict = ppvar_from_collabedit(edit);
   // Send the message to JS.
   ppb_msg->PostMessage(pp_ins, dict);
   // Clean up leftovers.
   ppb_var->Release(dict);
 }
 
-/*
- * The main execution point of this project.
- */
-int nacl_main(int argc, char* argv[]) {
-  if (setup_unix_environment("vim.tar"))
-    return 1;
-
+int ppb_var_init() {
   // Get the interface variables for manipulating PP_Vars.
   ppb_var = PSInterfaceVar();
   ppb_dict = PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
@@ -241,7 +242,7 @@ int nacl_main(int argc, char* argv[]) {
   pp_ins = PSGetInstanceId();
   // Check for missing interfaces.
   if (ppb_var == NULL || ppb_dict == NULL || ppb_msg == NULL) {
-    return 2;
+    return 1;
   }
 
   // Create PP_Vars for parsing and creating collabedit JS messages
@@ -255,6 +256,19 @@ int nacl_main(int argc, char* argv[]) {
   text_key = UTF8_TO_VAR("text");
   index_key = UTF8_TO_VAR("index");
   length_key = UTF8_TO_VAR("length");
+
+  return 0;
+}
+
+/*
+ * The main execution point of this project.
+ */
+int nacl_main(int argc, char* argv[]) {
+  if (setup_unix_environment("vim.tar"))
+    return 1;
+
+  if (ppb_var_init())
+    return 2;
 
   // Start up message handler loop
   pthread_t looper;

@@ -3,6 +3,7 @@
 // A test runner for all functionality provided in collaborate.c
 
 #include "gtest/gtest.h"
+#include "testcollab.h"
 
 extern "C" {
 #include "nacl_io/nacl_io.h"
@@ -82,27 +83,14 @@ TEST_F(CollaborativeEditQueue, buffers_partial_pending_keys) {
   ASSERT_EQ('\0', inbuf[3]);
 }
 
-// Takes a string literal and copies it into freshly malloc'ed memory.
-// Meant for setting strings that will later be freed.
-// Returns the new heap string as a char_u*.
-static char_u* malloc_literal(const std::string& kStr) {
-  // Assert that sizeof(char_u) is 1 for memcpy's sake.
-  static_assert((sizeof(char_u) == 1), "sizeof char_u should be 1 for memcpy.");
-  size_t num_bytes = (kStr.length() + 1); // Add 1 for the null byte
-  char_u *str = static_cast<char_u *>(malloc(num_bytes));
-  if (str == NULL) return NULL;
-  memcpy(str, kStr.c_str(), num_bytes);
-  return str;
-}
-
-// Tests that a single collabedit_T text insert is applied.
-TEST_F(CollaborativeEditQueue, applies_text_insert) {
-  // Enqueue an insert edit and process it.
+// Tests that a single collabedit_T append line is applied.
+TEST_F(CollaborativeEditQueue, applies_append_line) {
+  // Enqueue an append edit and process it.
   collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  hello_edit->type = COLLAB_TEXT_INSERT;
+  hello_edit->type = COLLAB_APPEND_LINE;
   hello_edit->file_buf = curbuf; 
-  hello_edit->edit.text_insert.line = 0;
-  hello_edit->edit.text_insert.text = malloc_literal("Hello world!"); 
+  hello_edit->append_line.line = 0;
+  hello_edit->append_line.text = malloc_literal("Hello world!"); 
 
   collab_enqueue(&collab_queue, hello_edit);
   
@@ -114,24 +102,72 @@ TEST_F(CollaborativeEditQueue, applies_text_insert) {
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
 }
 
-// Tests that a single collabedit_T text delete is applied.
-TEST_F(CollaborativeEditQueue, applies_text_delete) {
+// Tests that a single collabedit_T remove line is applied.
+TEST_F(CollaborativeEditQueue, applies_remove_line) {
   // Start with some text in the buffer.
-  ml_append(0, malloc_literal("Hello"), 0, FALSE);
-  ml_append(1, malloc_literal("world!"), 0, FALSE);
+  ml_append_collab(0, malloc_literal("Hello"), 0, FALSE, FALSE);
+  ml_append_collab(1, malloc_literal("world!"), 0, FALSE, FALSE);
   appended_lines_mark(1, 2);
 
   // Enqueue a delete edit and process it
   collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  hello_edit->type = COLLAB_TEXT_DELETE;
+  hello_edit->type = COLLAB_REMOVE_LINE;
   hello_edit->file_buf = curbuf;
-  hello_edit->edit.text_delete.line = 1;
+  hello_edit->remove_line.line = 1;
+
+  collab_enqueue(&collab_queue, hello_edit);
+
+  collab_applyedits(&collab_queue);
+
+  ASSERT_STREQ("world!", reinterpret_cast<char *>(ml_get(1)));
+
+  // Check that queue is now empty
+  ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
+}
+
+// Tests that a single collabedit_T insert text is applied.
+TEST_F(CollaborativeEditQueue, applies_insert_text) {
+  // Start with some text in the buffer.
+  ml_append_collab(0, malloc_literal("Hell!"), 0, FALSE, FALSE);
+  appended_lines_mark(1, 1);
+
+  // Enqueue an insert edit and process it.
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_INSERT_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->insert_text.line = 1;
+  hello_edit->insert_text.index = 4;
+  hello_edit->insert_text.text = malloc_literal("o world"); 
+
+  collab_enqueue(&collab_queue, hello_edit);
+
+  collab_applyedits(&collab_queue);
+
+  ASSERT_STREQ("Hello world!", reinterpret_cast<char *>(ml_get(1))); 
+
+  // Check that queue is now empty
+  ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
+}
+
+// Tests that a single collabedit_T delete text is applied.
+TEST_F(CollaborativeEditQueue, applies_delete_text) {
+  // Start with some text in the buffer.
+  ml_append_collab(0, malloc_literal("Hello qwerty world!"), 0, FALSE, FALSE);
+  appended_lines_mark(1, 1);
+
+  // Enqueue a delete edit and process it.
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_DELETE_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->delete_text.line = 1;
+  hello_edit->delete_text.index = 6;
+  hello_edit->delete_text.length = 7;
 
   collab_enqueue(&collab_queue, hello_edit);
   
   collab_applyedits(&collab_queue);
   
-  ASSERT_STREQ("world!", reinterpret_cast<char *>(ml_get(1)));
+  ASSERT_STREQ("Hello world!", reinterpret_cast<char *>(ml_get(1))); 
 
   // Check that queue is now empty
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
@@ -150,24 +186,24 @@ TEST_F(CollaborativeEditQueue, restores_curbuf) {
 
   // Enqueue a few edits with different buffers.
   collabedit_T *edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = buffalo; 
-  edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffalo!"); 
+  edit->append_line.line = 0;
+  edit->append_line.text = malloc_literal("Hello buffalo!"); 
   collab_enqueue(&collab_queue, edit);
   
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = buffoon;
-  edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffoon!"); 
+  edit->append_line.line = 0;
+  edit->append_line.text = malloc_literal("Hello buffoon!"); 
   collab_enqueue(&collab_queue, edit);
 
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = buffet; 
-  edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello buffet!"); 
+  edit->append_line.line = 0;
+  edit->append_line.text = malloc_literal("Hello buffet!"); 
   collab_enqueue(&collab_queue, edit);
 
   // Apply the edits.
@@ -191,44 +227,58 @@ TEST_F(CollaborativeEditQueue, restores_curbuf) {
 // Tests that multiple collabedit_T's of different types can be applied.
 TEST_F(CollaborativeEditQueue, applies_many_edits) {
   // Enqueue a few edits.
+  // Line 1: Hello
   collabedit_T *edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = curbuf;
-  edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Hello");
+  edit->append_line.line = 0;
+  edit->append_line.text = malloc_literal("Hello");
   collab_enqueue(&collab_queue, edit);
  
+  // Line 1: Hello world!
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
-  edit->file_buf = curbuf;
-  edit->edit.text_insert.line = 1;
-  edit->edit.text_insert.text = malloc_literal("world!");
+  edit->type = COLLAB_INSERT_TEXT;
+  edit->file_buf = curbuf; 
+  edit->insert_text.line = 1;
+  edit->insert_text.index = 5;
+  edit->insert_text.text = malloc_literal(" world!"); 
   collab_enqueue(&collab_queue, edit);
 
+  // Line 1: Test my 
+  // Line 2: Hello world!
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_DELETE;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = curbuf;
-  edit->edit.text_delete.line = 1;
+  edit->append_line.line = 0;
+  edit->append_line.text = malloc_literal("Test my");
   collab_enqueue(&collab_queue, edit);
 
+  // Line 1: Test my 
+  // Line 2: world!
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
-  edit->file_buf = curbuf;
-  edit->edit.text_insert.line = 0;
-  edit->edit.text_insert.text = malloc_literal("Test my");
+  edit->type = COLLAB_DELETE_TEXT;
+  edit->file_buf = curbuf; 
+  edit->delete_text.line = 2;
+  edit->delete_text.index = 0;
+  edit->delete_text.length = 6;
   collab_enqueue(&collab_queue, edit);
 
+  // Line 1: Test my 
+  // Line 2: programmatic
+  // Line 3: world!
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_INSERT;
+  edit->type = COLLAB_APPEND_LINE;
   edit->file_buf = curbuf;
-  edit->edit.text_insert.line = 1;
-  edit->edit.text_insert.text = malloc_literal("programmatic");
+  edit->append_line.line = 1;
+  edit->append_line.text = malloc_literal("programmatic");
   collab_enqueue(&collab_queue, edit);
 
+  // Line 1: programmatic
+  // Line 2: world!
   edit = (collabedit_T*) malloc(sizeof(collabedit_T));
-  edit->type = COLLAB_TEXT_DELETE;
+  edit->type = COLLAB_REMOVE_LINE;
   edit->file_buf = curbuf;
-  edit->edit.text_delete.line = 1;
+  edit->remove_line.line = 1;
   collab_enqueue(&collab_queue, edit);
 
   // Process edit queue.
@@ -242,3 +292,174 @@ TEST_F(CollaborativeEditQueue, applies_many_edits) {
   ASSERT_EQ(NULL, collab_dequeue(&collab_queue));
 }
 
+// Tests that the cursor is adjusted to append lines.
+TEST_F(CollaborativeEditQueue, cursor_adjusted_to_append_line) {
+  // Start with some text in the buffer and set up init cursor.
+  ml_append_collab(0, malloc_literal("Hello world!"), 0, FALSE, FALSE);
+  appended_lines_mark(1, 1);
+  curwin->w_cursor.lnum = 1;
+  curwin->w_cursor.col= 5;
+
+  // Append after cursor.
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_APPEND_LINE;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->append_line.line = 1;
+  hello_edit->append_line.text = malloc_literal("After cursor."); 
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor shouldn't have moved.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+  
+  // Append before cursor.
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_APPEND_LINE;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->append_line.line = 0;
+  hello_edit->append_line.text = malloc_literal("Before cursor."); 
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor should have moved a line down.
+  ASSERT_EQ(2, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+}
+
+// Tests that the cursor is adjusted to remove lines.
+TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
+  // Start with some text in the buffer and set up init cursor.
+  ml_append_collab(0, malloc_literal("Hello world!"), 0, FALSE, FALSE);
+  ml_append_collab(0, malloc_literal("Just another test string."), 0, FALSE, FALSE);
+  ml_append_collab(0, malloc_literal("What did you expect?"), 0, FALSE, FALSE);
+  ml_append_collab(0, malloc_literal("One more for good luck."), 0, FALSE, FALSE);
+  appended_lines_mark(1, 4);
+  curwin->w_cursor.lnum = 3;
+  curwin->w_cursor.col= 5;
+
+  // Delete the last line. 
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_REMOVE_LINE;
+  hello_edit->file_buf = curbuf;
+  hello_edit->remove_line.line = 4;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor shouldn't have moved.
+  ASSERT_EQ(3, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+ 
+  // Delete a line above cursor. 
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_REMOVE_LINE;
+  hello_edit->file_buf = curbuf;
+  hello_edit->remove_line.line = 2;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor should have moved up a line.
+  ASSERT_EQ(2, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+ 
+  // Delete the line of the cursor. 
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_REMOVE_LINE;
+  hello_edit->file_buf = curbuf;
+  hello_edit->remove_line.line = 2;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor should have moved to end of line above.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  int end_col = STRLEN(ml_get(1)) - 1;
+  ASSERT_EQ(end_col, curwin->w_cursor.col);
+}
+
+// Tests that the cursor is adjusted to insert texts.
+TEST_F(CollaborativeEditQueue, cursor_adjusted_to_insert_text) {
+  // Start with some text in the buffer and set up init cursor.
+  ml_append_collab(0, malloc_literal("Hello world!"), 0, FALSE, FALSE);
+  appended_lines_mark(1, 1);
+  curwin->w_cursor.lnum = 1;
+  curwin->w_cursor.col= 5;
+
+  // Insert after the cursor.
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_INSERT_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->insert_text.line = 1;
+  hello_edit->insert_text.index = 7;
+  hello_edit->insert_text.text = malloc_literal("qwerty"); 
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor shouldn't have moved.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+ 
+  // Insert before the cursor.
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_INSERT_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->insert_text.line = 1;
+  hello_edit->insert_text.index = 0;
+  hello_edit->insert_text.text = malloc_literal("X"); 
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor should have moved forward one column.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(6, curwin->w_cursor.col);
+}
+
+// Tests that the cursor is adjusted to delete texts.
+TEST_F(CollaborativeEditQueue, cursor_adjusted_to_delete_text) {
+  // Start with some text in the buffer and set up init cursor.
+  ml_append_collab(0, malloc_literal("Hello world!"), 0, FALSE, FALSE);
+  appended_lines_mark(1, 1);
+  curwin->w_cursor.lnum = 1;
+  curwin->w_cursor.col= 5;
+
+  // Delete after the cursor.
+  collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_DELETE_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->delete_text.line = 1;
+  hello_edit->delete_text.index = 6;
+  hello_edit->delete_text.length = 1;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+  
+  // Cursor shouldn't have moved.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(5, curwin->w_cursor.col);
+
+  // Delete before the cursor.
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_DELETE_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->delete_text.line = 1;
+  hello_edit->delete_text.index = 0;
+  hello_edit->delete_text.length = 2;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+  
+  // Cursor should have moved to the left by 2.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(3, curwin->w_cursor.col);
+
+  // Delete over the cursor.
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_DELETE_TEXT;
+  hello_edit->file_buf = curbuf; 
+  hello_edit->delete_text.line = 1;
+  hello_edit->delete_text.index = 1;
+  hello_edit->delete_text.length = 6;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+  
+  // Cursor should have moved to start of the delete.
+  ASSERT_EQ(1, curwin->w_cursor.lnum);
+  ASSERT_EQ(1, curwin->w_cursor.col);
+}

@@ -121,8 +121,11 @@ static void applyedit(collabedit_T *cedit) {
     case COLLAB_REMOVE_LINE:
       ml_delete_collab(cedit->remove_line.line, 0, FALSE);
       // Adjust cursor position.
-      if (curwin->w_cursor.lnum > cedit->remove_line.line)
+      if (curwin->w_cursor.lnum >= cedit->remove_line.line) {
         curwin->w_cursor.lnum--;
+        if (curwin->w_cursor.lnum + 1 == cedit->remove_line.line)
+          curwin->w_cursor.col = STRLEN(ml_get(curwin->w_cursor.lnum)) - 1;
+      }
       // Mark line for redraw.
       deleted_lines_mark(cedit->remove_line.line, 1);
       break;
