@@ -5319,8 +5319,10 @@ do_addsub(command, Prenum1)
     --curwin->w_cursor.col;
     curwin->w_set_curswant = TRUE;
 #ifdef FEAT_RIGHTLEFT
-    // Replace a reversed copy of the string (instead of reversing in place).
-    // A collaborative event will not be fired otherwise.
+    /* 
+     * Replace a reversed copy of the string (instead of reversing in place).
+     * This ensures a collaborative event will be fired.
+     */
     ptr = ml_get(curwin->w_cursor.lnum);
     char_u *rev = alloc(STRLEN(ptr) + 1); // +1 for \0 byte
     STRCPY(rev, ptr);

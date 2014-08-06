@@ -106,8 +106,7 @@ static int pp_strcmp(const struct PP_Var v1, const struct PP_Var v2) {
   const char *v1str, *v2str;
   v1str = ppb_var->VarToUtf8(v1, &v1len);
   v2str = ppb_var->VarToUtf8(v2, &v2len);
-  size_t n = (v1len < v2len)? v1len : v2len;
-  int cmp = strncmp(v1str, v2str, n);
+  int cmp = strncmp(v1str, v2str, MIN(v1len, v2len));
   if (!cmp)
     cmp = v1len - v2len;
   return cmp;
@@ -116,18 +115,22 @@ static int pp_strcmp(const struct PP_Var v1, const struct PP_Var v2) {
 // Create a PP_Var from a collabedit_T.
 struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
   struct PP_Var dict = ppb_dict->Create();
+  // This temporary PP_Var will be Release'd after the switch cases.
+  struct PP_Var text_var;
   // TODO(zpotter): set file_buf
   switch (edit->type) {
     case COLLAB_APPEND_LINE:
       ppb_dict->Set(dict, type_key, type_append_line);
       ppb_dict->Set(dict, line_key, PP_MakeInt32(edit->append_line.line));
-      ppb_dict->Set(dict, text_key, UTF8_TO_VAR((char *)edit->append_line.text));
+      text_var = UTF8_TO_VAR((char *)edit->append_line.text);
+      ppb_dict->Set(dict, text_key, text_var);
       break;
     case COLLAB_INSERT_TEXT:
       ppb_dict->Set(dict, type_key, type_insert_text);
       ppb_dict->Set(dict, line_key, PP_MakeInt32(edit->insert_text.line));
       ppb_dict->Set(dict, index_key, PP_MakeInt32(edit->insert_text.index));
-      ppb_dict->Set(dict, text_key, UTF8_TO_VAR((char *)edit->insert_text.text));
+      text_var = UTF8_TO_VAR((char *)edit->insert_text.text);
+      ppb_dict->Set(dict, text_key, text_var);
       break;
     case COLLAB_REMOVE_LINE:
       ppb_dict->Set(dict, type_key, type_remove_line);
@@ -142,9 +145,12 @@ struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
     case COLLAB_REPLACE_LINE:
       ppb_dict->Set(dict, type_key, type_replace_line);
       ppb_dict->Set(dict, line_key, PP_MakeInt32(edit->replace_line.line));
-      ppb_dict->Set(dict, text_key, UTF8_TO_VAR((char *)edit->replace_line.text));
+      text_var = UTF8_TO_VAR((char *)edit->replace_line.text);
+      ppb_dict->Set(dict, text_key, text_var);
       break;
   }
+  // Free the ref-counted temporary variable.
+  ppb_var->Release(text_var);
   return dict;
 }
 

@@ -333,16 +333,17 @@ TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
   ml_append_collab(0, malloc_literal("Hello world!"), 0, FALSE, FALSE);
   ml_append_collab(0, malloc_literal("Just another test string."), 0, FALSE, FALSE);
   ml_append_collab(0, malloc_literal("What did you expect?"), 0, FALSE, FALSE);
+  ml_append_collab(0, malloc_literal("Looking for another?"), 0, FALSE, FALSE);
   ml_append_collab(0, malloc_literal("One more for good luck."), 0, FALSE, FALSE);
   appended_lines_mark(1, 4);
   curwin->w_cursor.lnum = 3;
   curwin->w_cursor.col= 5;
 
-  // Delete the last line. 
+  // Delete the last line.
   collabedit_T *hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   hello_edit->type = COLLAB_REMOVE_LINE;
   hello_edit->file_buf = curbuf;
-  hello_edit->remove_line.line = 4;
+  hello_edit->remove_line.line = 5;
   collab_enqueue(&collab_queue, hello_edit);
   collab_applyedits(&collab_queue);
 
@@ -350,7 +351,7 @@ TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
   ASSERT_EQ(3, curwin->w_cursor.lnum);
   ASSERT_EQ(5, curwin->w_cursor.col);
  
-  // Delete a line above cursor. 
+  // Delete a line above cursor.
   hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   hello_edit->type = COLLAB_REMOVE_LINE;
   hello_edit->file_buf = curbuf;
@@ -362,7 +363,7 @@ TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
   ASSERT_EQ(2, curwin->w_cursor.lnum);
   ASSERT_EQ(5, curwin->w_cursor.col);
  
-  // Delete the line of the cursor. 
+  // Delete the line of the cursor.
   hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
   hello_edit->type = COLLAB_REMOVE_LINE;
   hello_edit->file_buf = curbuf;
@@ -370,7 +371,19 @@ TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
   collab_enqueue(&collab_queue, hello_edit);
   collab_applyedits(&collab_queue);
 
-  // Cursor should have moved to end of line above.
+  // Cursor should have moved to the start of its current line.
+  ASSERT_EQ(2, curwin->w_cursor.lnum);
+  ASSERT_EQ(0, curwin->w_cursor.col);
+
+  // Delete the line of the cursor, which is also the last line of the file.
+  hello_edit = (collabedit_T*) malloc(sizeof(collabedit_T));
+  hello_edit->type = COLLAB_REMOVE_LINE;
+  hello_edit->file_buf = curbuf;
+  hello_edit->remove_line.line = 2;
+  collab_enqueue(&collab_queue, hello_edit);
+  collab_applyedits(&collab_queue);
+
+  // Cursor should be on the last char of the previous line.
   ASSERT_EQ(1, curwin->w_cursor.lnum);
   int end_col = STRLEN(ml_get(1)) - 1;
   ASSERT_EQ(end_col, curwin->w_cursor.col);

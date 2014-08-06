@@ -31,13 +31,15 @@ typedef struct collabedit_S {
   union {
     struct {          /* Type: COLLAB_APPEND_LINE */
       size_t line;    /* The line to add after. Line 0 adds a new 1st line. */
-      char_u *text;   /* The text to initialize the line with. */
+      char_u *text;   /* The text to initialize the line with. Shouldn't end
+                         with a newline. Ownership of 'text' transfered here. */
     } append_line;
   
     struct {          /* Type: COLLAB_INSERT_TEXT */
       size_t line;    /* The line to insert text into. */
       size_t index;   /* The character in the line to insert before. */
-      char_u *text;   /* The text to insert. */
+      char_u *text;   /* The text to insert. Ownership of 'text' transfered
+                         here. */
     } insert_text;
     
     struct {          /* Type: COLLAB_REMOVE_LINE */
@@ -52,7 +54,8 @@ typedef struct collabedit_S {
 
     struct {          /* Type: COLLAB_REPLACE_LINE */
       size_t line;    /* The line to replace. */
-      char_u * text;  /* The new contents of the line. */
+      char_u *text;   /* The new contents of the line. Shouldn't end with a
+                         newline. Ownership of 'text' transfered here. */
     } replace_line;
   };
 } collabedit_T;

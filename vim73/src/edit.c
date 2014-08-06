@@ -8531,6 +8531,9 @@ ins_bs(c, mode, inserted_space_p)
 		    char_u  *ptr = ml_get(curwin->w_cursor.lnum);
 		    int	    len;
 
+	            /* Instead of changing a single character of the line in 
+	             * place, call pchar to do the same thing but fire a
+	             * collab event. */
 		    len = (int)STRLEN(ptr);
 		    if (len > 0 && ptr[len - 1] == ' ') {
 		        pos_T colL = {

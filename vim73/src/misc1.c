@@ -2260,7 +2260,7 @@ del_bytes(count, fixpos_arg, use_delcombine)
     /*
      * When attempting to delete past the end of the line, reduce count.
      */
-    if (oldlen - col - count <= 0)
+    if ((long)oldlen - (long)col - count <= 0)
     {
 	/*
 	 * If we just took off the last character of a non-blank line, and
@@ -2306,7 +2306,7 @@ del_bytes_collab(pos, count, fire_event)
     int         fire_event;
 {
     char_u *oldp = ml_get(pos.lnum);
-    size_t oldlen = STRLEN(oldp) + 1;
+    size_t oldlen = STRLEN(oldp);
     size_t movelen = oldlen - pos.col - count + 1; /* includes trailing NUL */
 
     char_u *newp = alloc(oldlen + 1 - count);
