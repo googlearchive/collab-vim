@@ -6999,17 +6999,18 @@ nv_replace(cap)
 	     */
 	    for (n = cap->count1; n > 0; --n)
 	    {
-		/*
-		 * Get ptr again, because u_save and/or showmatch() will have
-		 * released the line.  At the same time we let know that the
-		 * line will be changed.
-		 */
-		ptr = ml_get_buf(curbuf, curwin->w_cursor.lnum, TRUE);
-		ptr[curwin->w_cursor.col] = cap->nchar;
+		pchar_cursor(cap->nchar);
 		if (p_sm && msg_silent == 0)
 		    showmatch(cap->nchar);
 		++curwin->w_cursor.col;
 	    }
+
+	    /*
+	     * Get ptr again, because u_save and/or showmatch() will have
+	     * released the line.
+	     */
+	    ptr = ml_get(curwin->w_cursor.lnum);
+
 #ifdef FEAT_NETBEANS_INTG
 	    if (netbeans_active())
 	    {

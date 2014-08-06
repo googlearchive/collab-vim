@@ -31,6 +31,12 @@ static const size_t collab_keys_length =
 static int next_key_index = -1;
 
 /*
+ * Sends a local user edit to remote collaborators.
+ * Implementation is specific to collaborative backend.
+ */
+extern void collab_remoteapply(collabedit_T *edit);
+
+/*
  * Called from vim's main() before the main loop begins. Sets up data that
  * needs some configuration.
  */
@@ -87,30 +93,86 @@ static void applyedit(collabedit_T *cedit) {
   // First select the right collaborative buffer
   buf_T *oldbuf = curbuf;
   if (curbuf != cedit->file_buf) set_curbuf(cedit->file_buf, DOBUF_GOTO);
-
   // Apply edit depending on type
   switch (cedit->type) {
-    case COLLAB_TEXT_DELETE:
-      // Delete the specified line from the buffer
-      ml_delete(cedit->edit.text_delete.line, 0);
-      // Update cursor and mark for redraw
-      deleted_lines_mark(cedit->edit.text_delete.line, 1);
+    case COLLAB_APPEND_LINE:
+      ml_append_collab(cedit->append_line.line, cedit->append_line.text, 0, FALSE, FALSE);
+      // Adjust cursor position: If the cursor is on a line below the newly
+      // appended line, the line it was previously on has been pushed down.
+      // Push the cursor down to its old position on the old line.
+      if (curwin->w_cursor.lnum > cedit->append_line.line)
+        curwin->w_cursor.lnum++;
+      // Mark lines for redraw. Just appended a line below append_line.line
+      appended_lines_mark(cedit->append_line.line, 1);
+      free(cedit->append_line.text);
       break;
 
-    case COLLAB_TEXT_INSERT:
-      // Add the new line to the buffer
-      ml_append(cedit->edit.text_insert.line, cedit->edit.text_insert.text, 0, FALSE);
-      // Update cursor and mark for redraw.
-      // Just appended a line below text_insert.line
-      appended_lines_mark(cedit->edit.text_insert.line, 1);
-      // Free up union specifics
-      free(cedit->edit.text_insert.text);
+    case COLLAB_INSERT_TEXT:
+    {
+      // TODO(zpotter) adjust char index to utf8 byte index
+      pos_T ins_pos = { .lnum = cedit->insert_text.line, .col = cedit->insert_text.index };
+      ins_str_collab(ins_pos, cedit->insert_text.text, FALSE);
+      // Adjust cursor position: If the cursor is on the edited line and after
+      // the insert col, push it to the right the length of the inserted text.
+      if (curwin->w_cursor.lnum == ins_pos.lnum &&
+          curwin->w_cursor.col >= ins_pos.col)
+        curwin->w_cursor.col += STRLEN(cedit->insert_text.text);
+      free(cedit->insert_text.text);
+      break;
+    }
+
+    case COLLAB_REMOVE_LINE:
+      ml_delete_collab(cedit->remove_line.line, 0, FALSE);
+      // Adjust cursor position...
+      if (curwin->w_cursor.lnum > cedit->remove_line.line) {
+        // If cursor is after removed line, shift cursor up a line.
+        curwin->w_cursor.lnum--;
+      } else if (curwin->w_cursor.lnum == cedit->remove_line.line) {
+        // If cursor is on the deleted line...
+        if (curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count) {
+          // If cursor is on the last line, move it to the end of the 
+          // previous line.
+          curwin->w_cursor.lnum--;
+          curwin->w_cursor.col = STRLEN(ml_get(curwin->w_cursor.lnum)) - 1;
+        } else {
+          // Move cursor to start of current line (which now has contents
+          // of the next line).
+          curwin->w_cursor.col = 0;
+        }
+      }
+      // Mark line for redraw.
+      deleted_lines_mark(cedit->remove_line.line, 1);
+      break;
+
+    case COLLAB_DELETE_TEXT:
+    {
+      // TODO(zpotter) adjust char index to utf8 byte index
+      pos_T del_pos = { .lnum = cedit->delete_text.line, .col = cedit->delete_text.index };
+      del_bytes_collab(del_pos, cedit->delete_text.length, FALSE);
+      // Adjust cursor position: If the cursor is on the edited line and after
+      // or on the start of the deleted text...
+      if (curwin->w_cursor.lnum == del_pos.lnum &&
+          curwin->w_cursor.col >= del_pos.col) {
+        // If the cursor is on one of the deleted characters, send it to the
+        // start of deleted selection. Otherwise, shift the cursor left by the
+        // length of deleted text.
+        if (curwin->w_cursor.col < del_pos.col + cedit->delete_text.length) {
+          curwin->w_cursor.col = del_pos.col;
+        } else {
+          curwin->w_cursor.col -= cedit->delete_text.length;
+        }
+      }
+      break;
+    }
+
+    case COLLAB_REPLACE_LINE:
+      // An outgoing event. Should not see this case.
+      js_printf("info: applyedit unexpected COLLAB_REPLACE_LINE edit");
       break;
   }
-  // Switch back to old buffer if necessary 
+  // Switch back to old buffer if necessary.
   if (curbuf != oldbuf) set_curbuf(oldbuf, DOBUF_GOTO);
-
-  // Done with collabedit_T, so free it
+  // Done with collabedit_T, so free it.
   free(cedit);
 }
 

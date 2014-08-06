@@ -2099,26 +2099,25 @@ ins_char_bytes(buf, charlen)
 }
 
 /*
- * Insert a string at the cursor position.
+ * Insert a string at the position.
  * Note: Does NOT handle Replace mode.
  * Caller must have prepared for undo.
+ *
+ *  fire_event: TRUE to send remote collaborators a collaborative event.
  */
     void
-ins_str(s)
-    char_u	*s;
+ins_str_collab(pos, s, fire_event)
+    pos_T       pos;
+    char_u      *s;
+    int         fire_event;
 {
     char_u	*oldp, *newp;
     int		newlen = (int)STRLEN(s);
     int		oldlen;
     colnr_T	col;
-    linenr_T	lnum = curwin->w_cursor.lnum;
+    linenr_T	lnum = pos.lnum;
 
-#ifdef FEAT_VIRTUALEDIT
-    if (virtual_active() && curwin->w_cursor.coladd > 0)
-	coladvance_force(getviscol());
-#endif
-
-    col = curwin->w_cursor.col;
+    col = pos.col;
     oldp = ml_get(lnum);
     oldlen = (int)STRLEN(oldp);
 
@@ -2129,9 +2128,27 @@ ins_str(s)
 	mch_memmove(newp, oldp, (size_t)col);
     mch_memmove(newp + col, s, (size_t)newlen);
     mch_memmove(newp + col + newlen, oldp + col, (size_t)(oldlen - col + 1));
-    ml_replace(lnum, newp, FALSE);
+    ml_replace_collab(lnum, newp, FALSE, fire_event);
     changed_bytes(lnum, col);
-    curwin->w_cursor.col += newlen;
+}
+
+/*
+ * Insert a string at the cursor position.
+ * Automatically sends local edits to remote collaborators.
+ * Note: Does NOT handle Replace mode.
+ * Caller must have prepared for undo.
+ */
+    void
+ins_str(s)
+    char_u	*s;
+{
+#ifdef FEAT_VIRTUALEDIT
+    if (virtual_active() && curwin->w_cursor.coladd > 0)
+	coladvance_force(getviscol());
+#endif
+    ins_str_collab(curwin->w_cursor, s, TRUE);
+    /* Adjust cursor for new length of line. */
+    curwin->w_cursor.col += STRLEN(s);
 }
 
 /*
@@ -2188,6 +2205,8 @@ del_chars(count, fixpos)
  * If "fixpos" is TRUE, don't leave the cursor on the NUL after the line.
  * Caller must have prepared for undo.
  *
+ * Automatically sends local edits to remote collaborators.
+ *
  * return FAIL for failure, OK otherwise
  */
     int
@@ -2239,10 +2258,9 @@ del_bytes(count, fixpos_arg, use_delcombine)
 #endif
 
     /*
-     * When count is too big, reduce it.
+     * When attempting to delete past the end of the line, reduce count.
      */
-    movelen = (long)oldlen - (long)col - count + 1; /* includes trailing NUL */
-    if (movelen <= 1)
+    if ((long)oldlen - (long)col - count <= 0)
     {
 	/*
 	 * If we just took off the last character of a non-blank line, and
@@ -2266,37 +2284,41 @@ del_bytes(count, fixpos_arg, use_delcombine)
 #endif
 	}
 	count = oldlen - col;
-	movelen = 1;
     }
 
-    /*
-     * If the old line has been allocated the deletion can be done in the
-     * existing line. Otherwise a new line has to be allocated
-     * Can't do this when using Netbeans, because we would need to invoke
-     * netbeans_removed(), which deallocates the line.  Let ml_replace() take
-     * care of notifying Netbeans.
-     */
-#ifdef FEAT_NETBEANS_INTG
-    if (netbeans_active())
-	was_alloced = FALSE;
-    else
-#endif
-	was_alloced = ml_line_alloced();    /* check if oldp was allocated */
-    if (was_alloced)
-	newp = oldp;			    /* use same allocated memory */
-    else
-    {					    /* need to allocate a new line */
-	newp = alloc((unsigned)(oldlen + 1 - count));
-	if (newp == NULL)
-	    return FAIL;
-	mch_memmove(newp, oldp, (size_t)col);
-    }
-    mch_memmove(newp + col, oldp + col + count, (size_t)movelen);
-    if (!was_alloced)
-	ml_replace(lnum, newp, FALSE);
+    pos_T pos = { .lnum = lnum, .col = col };
+    return del_bytes_collab(pos, count, TRUE);
+}
+
+/*
+ * Delete "count" bytes from "pos".
+ * Does no bounds checking like del_bytes.
+ * Caller must have prepared for undo.
+ *
+ * return FAIL for failure, OK otherwise
+ *
+ *  fire_event: TRUE to send remote collaborators a collaborative event.
+ */
+    int
+del_bytes_collab(pos, count, fire_event)
+    pos_T       pos;
+    size_t      count;
+    int         fire_event;
+{
+    char_u *oldp = ml_get(pos.lnum);
+    size_t oldlen = STRLEN(oldp);
+    size_t movelen = oldlen - pos.col - count + 1; /* includes trailing NUL */
+
+    char_u *newp = alloc(oldlen + 1 - count);
+    if (newp == NULL)
+        return FAIL;
+    mch_memmove(newp, oldp, (size_t)pos.col);
+    mch_memmove(newp + pos.col, oldp + pos.col + count, movelen);
+    /* Replace the line to fire a collaborative event. */
+    ml_replace_collab(pos.lnum, newp, FALSE, fire_event);
 
     /* mark the buffer as changed and prepare for displaying */
-    changed_bytes(lnum, curwin->w_cursor.col);
+    changed_bytes(pos.lnum, pos.col);
 
     return OK;
 }
@@ -2401,16 +2423,35 @@ gchar_cursor()
     return (int)*ml_get_cursor();
 }
 
+static void changedOneline __ARGS((buf_T *buf, linenr_T lnum));
+static void changed_lines_buf __ARGS((buf_T *buf, linenr_T lnum, linenr_T lnume, long xtra));
+static void changed_common __ARGS((linenr_T lnum, colnr_T col, linenr_T lnume, long xtra));
+
+/*
+ * Put character 'c' at position 'lp' in the current buffer.
+ */
+    void
+pchar(lp, c)
+    pos_T	lp;
+    int  	c;
+{
+    char_u *read_ln = ml_get(lp.lnum);
+    char_u *replaced = alloc(STRLEN(read_ln) + 1); // +1 for \0 byte
+    STRCPY(replaced, read_ln);
+    replaced[lp.col] = c;
+    ml_replace(lp.lnum, replaced, FALSE);
+
+    changedOneline(curbuf, lp.lnum);
+}
+
 /*
  * Write a character at the current cursor position.
- * It is directly written into the block.
  */
     void
 pchar_cursor(c)
     int c;
 {
-    *(ml_get_buf(curbuf, curwin->w_cursor.lnum, TRUE)
-						  + curwin->w_cursor.col) = c;
+    pchar(curwin->w_cursor, c);
 }
 
 /*
@@ -2519,10 +2560,6 @@ changed_int()
     need_maketitle = TRUE;	    /* set window title later */
 #endif
 }
-
-static void changedOneline __ARGS((buf_T *buf, linenr_T lnum));
-static void changed_lines_buf __ARGS((buf_T *buf, linenr_T lnum, linenr_T lnume, long xtra));
-static void changed_common __ARGS((linenr_T lnum, colnr_T col, linenr_T lnume, long xtra));
 
 /*
  * Changed bytes within a single line for the current buffer.

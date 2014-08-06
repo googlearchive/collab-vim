@@ -11,11 +11,6 @@
  */
 
 /*
- * pchar(lp, c) - put character 'c' at position 'lp'
- */
-#define pchar(lp, c) (*(ml_get_buf(curbuf, (lp).lnum, TRUE) + (lp).col) = (c))
-
-/*
  * Position comparisons
  */
 #ifdef FEAT_VIRTUALEDIT
