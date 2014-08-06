@@ -280,6 +280,10 @@ int nacl_main(int argc, char* argv[]) {
   pthread_t looper;
   pthread_create(&looper, NULL, &js_msgloop, NULL);
 
+  // Tell JS and Realtime that Vim is ready to receive the init file.
+  // TODO(zpotter): send a real message here
+  js_printf("_vimready");
+
   // Execute vim's main loop
   return nacl_vim_main(argc, argv);
 }
