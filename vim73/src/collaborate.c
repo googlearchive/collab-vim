@@ -129,10 +129,10 @@ static void applyedit(collabedit_T *cedit) {
         curwin->w_cursor.lnum--;
       } else if (curwin->w_cursor.lnum == cedit->remove_line.line) {
         // If cursor is on the deleted line...
-        if (curwin->w_cursor.lnum == curbuf->b_ml.ml_line_count) {
-          // If cursor is on the last line, move it to the end of the 
-          // previous line.
-          curwin->w_cursor.lnum--;
+        if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
+          // If cursor is passed the last line, move it to the end of the 
+          // last line.
+          curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
           curwin->w_cursor.col = STRLEN(ml_get(curwin->w_cursor.lnum)) - 1;
         } else {
           // Move cursor to start of current line (which now has contents

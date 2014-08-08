@@ -335,7 +335,9 @@ TEST_F(CollaborativeEditQueue, cursor_adjusted_to_remove_line) {
   ml_append_collab(0, malloc_literal("What did you expect?"), 0, FALSE, FALSE);
   ml_append_collab(0, malloc_literal("Looking for another?"), 0, FALSE, FALSE);
   ml_append_collab(0, malloc_literal("One more for good luck."), 0, FALSE, FALSE);
-  appended_lines_mark(1, 4);
+  // Delete blank line that buffer started with.
+  ml_delete_collab(6, 0, FALSE);
+  appended_lines_mark(1, 5);
   curwin->w_cursor.lnum = 3;
   curwin->w_cursor.col= 5;
 
