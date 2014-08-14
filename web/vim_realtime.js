@@ -3,7 +3,7 @@
  */
 
 // Load the Picker API for Drive file selection.
-gapi.load('picker'); 
+gapi.load('picker');
 
 // Set app specific NaClTerm variables.
 NaClTerm.prefix = 'vim'
@@ -14,7 +14,7 @@ NaClTerm.nmf = 'vim.nmf'
  * inserted or deleted from a line, the index of the line in the document is
  * unknown. To avoid frequent O(n) searches for line numbers, this cache can be
  * used to track shifting of a set of lines.
- * @param {gapi.drive.realtime.CollaborativeList} src The list containing the 
+ * @param {gapi.drive.realtime.CollaborativeList} src The list containing the
  *    lines.
  * @param {number} opt_capacity The maximum size of the LRU cache. If 0 or not
  *    provided, uses a default cache size.
@@ -45,18 +45,18 @@ IndexCache.prototype.indexOf = function(line) {
     var index = this.source.indexOf(line);
     // Add to cache if line is in source.
     if (index >= 0)
-      this.add(line, index);
+      this.insert(line, index);
   }
   // Get cached index.
   return this.indices[line.id];
 }
-
 /**
+
  * Add a line to the cache, given a known index.
  * @param {gapi.drive.realtime.CollaborativeString} line The line to cache.
  * @param {number} index The current index of 'line' in 'source'.
  */
-IndexCache.prototype.add = function(line, index) {
+IndexCache.prototype.insert = function(line, index) {
   // Remove oldest element from cache.
   var oldestElem = this.lru[this.oldest];
   delete this.indices[oldestElem];
@@ -99,12 +99,16 @@ var TYPE_APPEND_LINE = 'append_line';
 var TYPE_INSERT_TEXT = 'insert_text';
 var TYPE_REMOVE_LINE = 'remove_line';
 var TYPE_DELETE_TEXT = 'delete_text';
+var TYPE_BUFFER_SYNC = 'buffer_sync';
 var TYPE_REPLACE_LINE = 'replace_line';
 var TYPE_KEY = 'collabedit_type';
+var BUF_ID_KEY = 'buf_id';
 var LINE_KEY = 'line';
 var TEXT_KEY = 'text';
 var INDEX_KEY = 'index';
 var LENGTH_KEY = 'length';
+var FILENAME_KEY = 'filename';
+var LINES_KEY = 'lines';
 
 /**
  * The index cache for tracking recently used lines.
@@ -146,7 +150,7 @@ rtvim.createInDrive = function() {
  *    dialog will be presented to the user to select a file.
  */
 rtvim.openFromDrive = function(opt_file) {
-  if (!file) {
+  if (!opt_file) {
     var token = gapi.auth.getToken().access_token;
     var view = new google.picker.View(google.picker.ViewId.DOCS);
     view.setMimeTypes(rtvim.rtOptions.newFileMimeType);
@@ -165,13 +169,13 @@ rtvim.openFromDrive = function(opt_file) {
     picker.setVisible(true);
     return;
   }
-  // Disable buttons for opening files 
+  // Disable buttons for opening files
   document.getElementById('createButton').disabled = true;
   document.getElementById('openButton').disabled = true;
   // Enable sharing button
   document.getElementById('shareButton').disabled = false;
 
-  rtvim.realtimeLoader.redirectTo([file.id],
+  rtvim.realtimeLoader.redirectTo([opt_file.id],
       rtvim.realtimeLoader.authorizer.userId);
 }
 
@@ -185,34 +189,35 @@ rtvim.shareDocument = function () {
 }
 
 /**
- * Handles incoming messages from NaCl. The 'this' variable refers to the 
+ * Handles incoming messages from NaCl. The 'this' variable refers to the
  * Realtime document.
  * @param {object} e A NaCl message.
  * @return {boolean} True if the message was consumed, otherwise false.
  */
 rtvim.applyLocalEdit = function(e) {
-  // Check for vim ready message
-  if (e.data == '_vimready') {
+  // Skip anything that doesn't look like a collabedit message.
+  if (!e.data || !e.data[TYPE_KEY]) return false;
+  console.log('HANDLE MESSAGE', e.data);
+  var collabedit = e.data;
+  if (collabedit[TYPE_KEY] == TYPE_BUFFER_SYNC) {
     // Only sync if the Realtime Document has been loaded. If Realtime
     // isn't yet ready, it will sync once the file loads.
     rtvim.needSync = true;
     if (rtvim.doc) rtvim.syncModel(rtvim.doc);
     return true;
   }
-  // Skip anything that doesn't look like a collabedit message.
-  if (!e.data || !e.data['collabedit_type']) return false;
-  // console.log('HANDLE MESSAGE', e.data);
+  // Skip processing if document hasn't been loaded yet.
+  if (!rtvim.doc) return true;
+  var rtLines = this.getModel().getRoot().get('vimlines');
   // Modify the realtime model on behalf of the vim user.
   // Remember, collabedit line numbers start at 1, NOT 0!
-  var collabedit = e.data;
-  var rtLines = this.getModel().getRoot().get('vimlines');
   if (collabedit[TYPE_KEY] == TYPE_REPLACE_LINE) {
     rtLines.get(collabedit[LINE_KEY] - 1).setText(collabedit[TEXT_KEY]);
 
   } else if (collabedit[TYPE_KEY] == TYPE_APPEND_LINE) {
     // Create new collaborative string and assign event listeners.
     var lineString = this.getModel().createString(collabedit[TEXT_KEY]);
-    lineString.addEventListener(gapi.drive.realtime.EventType.TEXT_INSERTED, 
+    lineString.addEventListener(gapi.drive.realtime.EventType.TEXT_INSERTED,
       rtvim.onTextInserted.bind(lineString));
     lineString.addEventListener(gapi.drive.realtime.EventType.TEXT_DELETED,
       rtvim.onTextDeleted.bind(lineString));
@@ -241,7 +246,7 @@ rtvim.applyLocalEdit = function(e) {
  * Called once the app has been authorized with Drive.
  */
 rtvim.driveAuthorized = function() {
-  // Enable buttons for opening files 
+  // Enable buttons for opening files
   document.getElementById('createButton').disabled = false;
   document.getElementById('openButton').disabled = false;
 }
@@ -293,7 +298,7 @@ rtvim.onFileLoaded = function(doc) {
  * @param {object} msg The message to send to native code.
  */
 rtvim.postMessage = function(msg) {
-  // console.log('POST MESSAGE', msg);
+  console.log('POST MESSAGE', msg);
   foreground_process.postMessage(msg);
 }
 
@@ -302,26 +307,22 @@ rtvim.postMessage = function(msg) {
  * @param {gapi.drive.realtime.Document} rtdoc The Realtime Document to sync.
  */
 rtvim.syncModel = function(rtdoc) {
-  // Fake a bunch of line append events
-  var lines = rtdoc.getModel().getRoot().get('vimlines');
-  for (var i = lines.length - 1; i >= 0; i--) {
-    var appendedit = {};
-    appendedit[TYPE_KEY] = TYPE_APPEND_LINE;
-    appendedit[LINE_KEY] = 0;
-    appendedit[TEXT_KEY] = lines.get(i).toString();
-    // TODO remove for propper sync
-    // First change is an insert because empty vim file starts with 1 empty line
-    if (i == lines.length - 1) {
-      appendedit[TYPE_KEY] = TYPE_INSERT_TEXT;
-      appendedit[LINE_KEY] = 1;
-      appendedit[INDEX_KEY] = 0;
-    }
-    rtvim.postMessage(appendedit);
+  var collabedit = {};
+  collabedit[TYPE_KEY] = TYPE_BUFFER_SYNC;
+  collabedit[BUF_ID_KEY] = 0;
+  collabedit[FILENAME_KEY] = "Collaborative File";
+
+  var doc_lines = rtdoc.getModel().getRoot().get('vimlines');
+  var lines = new Array(doc_lines.length);
+  for (var i = 0; i < doc_lines.length; ++i) {
+    lines[i] = doc_lines.get(i).toString();
   }
+  collabedit[LINES_KEY] = lines;
+  rtvim.postMessage(collabedit);
   rtvim.needSync = false;
 }
 
-/** 
+/**
  * Sends an append line event to Vim.
  * @param {gapi.drive.realtime.ValuesAddedEvent} ev The Realtime to send.
  */
@@ -334,13 +335,14 @@ rtvim.onLineAdded = function(ev) {
   // Construct collabedit messages to pass to Vim
   for (var i = 0; i < lines.length; i++) {
     // Add event listeners to the new line's CollaborativeString
-    lines[i].addEventListener(gapi.drive.realtime.EventType.TEXT_INSERTED, 
+    lines[i].addEventListener(gapi.drive.realtime.EventType.TEXT_INSERTED,
       rtvim.onTextInserted.bind(lines[i]));
     lines[i].addEventListener(gapi.drive.realtime.EventType.TEXT_DELETED,
       rtvim.onTextDeleted.bind(lines[i]));
 
     var collabedit = {};
     collabedit[TYPE_KEY] = TYPE_APPEND_LINE;
+    collabedit[BUF_ID_KEY] = 0;
     collabedit[LINE_KEY] = lnum + i;
     collabedit[TEXT_KEY] = lines[i].toString();
     // Let Vim know about the update
@@ -350,7 +352,7 @@ rtvim.onLineAdded = function(ev) {
   rtvim.lcache.shiftFrom(lnum, lines.length);
 }
 
-/** 
+/**
  * Sends a remove line event to Vim.
  * @param {gapi.drive.realtime.ValuesRemovedEvent} ev The Realtime to send.
  */
@@ -363,6 +365,7 @@ rtvim.onLineRemoved = function(ev) {
   for (var i = 0; i < ev.values.length; i++) {
     var collabedit = {};
     collabedit[TYPE_KEY] = TYPE_REMOVE_LINE;
+    collabedit[BUF_ID_KEY] = 0;
     collabedit[LINE_KEY] = lnum + 1;
     // Let Vim know about the update
     rtvim.postMessage(collabedit);
@@ -371,7 +374,7 @@ rtvim.onLineRemoved = function(ev) {
   rtvim.lcache.shiftFrom(lnum, -ev.values.length);
 }
 
-/** 
+/**
  * Sends an insert text event to Vim. The 'this' var refers to the
  * CollaborativeString that was modified.
  * @param {gapi.drive.realtime.TextInsertedEvent} ev The Realtime to send.
@@ -383,6 +386,7 @@ rtvim.onTextInserted = function(ev) {
   // Construct collabedit messages to pass to Vim
   var collabedit = {};
   collabedit[TYPE_KEY] = TYPE_INSERT_TEXT;
+  collabedit[BUF_ID_KEY] = 0;
   collabedit[LINE_KEY] = lnum + 1;
   collabedit[INDEX_KEY] = ev.index;
   collabedit[TEXT_KEY] = ev.text;
@@ -390,7 +394,7 @@ rtvim.onTextInserted = function(ev) {
   rtvim.postMessage(collabedit);
 }
 
-/** 
+/**
  * Sends a delete text event to Vim. The 'this' var refers to the
  * CollaborativeString that was modified.
  * @param {gapi.drive.realtime.TextInsertedEvent} ev The Realtime to send.
@@ -402,6 +406,7 @@ rtvim.onTextDeleted = function(ev) {
   // Construct collabedit messages to pass to Vim
   var collabedit = {};
   collabedit[TYPE_KEY] = TYPE_DELETE_TEXT;
+  collabedit[BUF_ID_KEY] = 0;
   collabedit[LINE_KEY] = lnum + 1;
   collabedit[INDEX_KEY] = ev.index;
   collabedit[LENGTH_KEY] = ev.text.length;
@@ -490,8 +495,9 @@ window.onload = function() {
   // Set up other UI handlers.
   document.getElementById('createButton')
       .addEventListener('click', rtvim.createInDrive);
+  // Call rtvim.openFromDrive() with no arguments to launch Drive open dialog.
   document.getElementById('openButton')
-      .addEventListener('click', rtvim.openFromDrive);
+      .addEventListener('click', function() { rtvim.openFromDrive(); });
   document.getElementById('shareButton')
       .addEventListener('click', rtvim.shareDocument);
 }

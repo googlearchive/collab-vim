@@ -3085,14 +3085,18 @@ ml_append_int(buf, lnum, line, len, newfile, mark, fire_event)
     }
 #endif
     if (fire_event) {
-        /* Send the local edit to the remote collaborators. */
-        collabedit_T append_edit = {
-            .type = COLLAB_APPEND_LINE,
-            .file_buf = buf,
-            .append_line.line = lnum,
-            .append_line.text = line
-        };
-        collab_remoteapply(&append_edit);
+        int bid = collab_get_bid(buf);
+        /* If bid < 0, buf is not actually collaborative. */
+        if (bid >= 0) {
+            /* Send the local edit to the remote collaborators. */
+            collabedit_T append_edit = {
+                .type = COLLAB_APPEND_LINE,
+                .buf_id = bid,
+                .append_line.line = lnum,
+                .append_line.text = line
+            };
+            collab_remoteapply(&append_edit);
+        }
     }
     return OK;
 }
@@ -3157,14 +3161,18 @@ ml_replace_collab(lnum, line, copy, fire_event)
     curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 
     if (fire_event) {
-        /* Send the local edit to the remote collaborators. */
-        collabedit_T replace_edit = {
-            .type = COLLAB_REPLACE_LINE,
-            .file_buf = curbuf,
-            .replace_line.line = lnum,
-            .replace_line.text = line
-        };
-        collab_remoteapply(&replace_edit);
+        int bid = collab_get_bid(curbuf);
+        /* If bid < 0, buf is not actually collaborative. */
+        if (bid >= 0) {
+            /* Send the local edit to the remote collaborators. */
+            collabedit_T replace_edit = {
+                .type = COLLAB_REPLACE_LINE,
+                .buf_id = bid,
+                .replace_line.line = lnum,
+                .replace_line.text = line
+            };
+            collab_remoteapply(&replace_edit);
+        }
     }
     return OK;
 }
@@ -3360,13 +3368,17 @@ ml_delete_int(buf, lnum, message, fire_event)
     ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
 #endif
     if (fire_event) {
-        /* Send the local edit to the remote collaborators. */
-        collabedit_T remove_edit = {
-            .type = COLLAB_REMOVE_LINE,
-            .file_buf = buf,
-            .remove_line.line = lnum,
-        };
-        collab_remoteapply(&remove_edit);
+        int bid = collab_get_bid(buf);
+        /* If bid < 0, buf is not actually collaborative. */
+        if (bid >= 0) {
+            /* Send the local edit to the remote collaborators. */
+            collabedit_T remove_edit = {
+                .type = COLLAB_REMOVE_LINE,
+                .buf_id = bid,
+                .remove_line.line = lnum,
+            };
+            collab_remoteapply(&remove_edit);
+        }
     }
     return OK;
 }

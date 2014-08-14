@@ -15,6 +15,7 @@
 #include "ppapi/c/ppb_messaging.h"
 #include "ppapi/c/ppb_var.h"
 #include "ppapi/c/ppb_var_dictionary.h"
+#include "ppapi/c/ppb_var_array.h"
 #include "ppapi_simple/ps.h"
 #include "ppapi_simple/ps_event.h"
 #include "ppapi_simple/ps_interface.h"
@@ -35,6 +36,7 @@ extern int nacl_vim_main(int argc, char *argv[]);
 static const PPB_Var *ppb_var;
 static const PPB_VarDictionary *ppb_dict;
 static const PPB_Messaging *ppb_msg;
+static const PPB_VarArray *ppb_array;
 static PP_Instance pp_ins;
 
 /*
@@ -44,12 +46,16 @@ static struct PP_Var type_append_line;
 static struct PP_Var type_insert_text;
 static struct PP_Var type_remove_line;
 static struct PP_Var type_delete_text;
+static struct PP_Var type_buffer_sync;
 static struct PP_Var type_replace_line;
 static struct PP_Var type_key;
+static struct PP_Var buf_id_key;
 static struct PP_Var line_key;
 static struct PP_Var text_key;
 static struct PP_Var index_key;
 static struct PP_Var length_key;
+static struct PP_Var filename_key;
+static struct PP_Var lines_key;
 
 /*
  * Sets up a nacl_io filesystem for vim's runtime files, such as the vimrc and
@@ -117,7 +123,7 @@ struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
   struct PP_Var dict = ppb_dict->Create();
   // This temporary PP_Var will be Release'd after the switch cases.
   struct PP_Var text_var;
-  // TODO(zpotter): set file_buf
+  ppb_dict->Set(dict, buf_id_key, PP_MakeInt32(edit->buf_id));
   switch (edit->type) {
     case COLLAB_APPEND_LINE:
       ppb_dict->Set(dict, type_key, type_append_line);
@@ -148,6 +154,10 @@ struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
       text_var = UTF8_TO_VAR((char *)edit->replace_line.text);
       ppb_dict->Set(dict, text_key, text_var);
       break;
+    case COLLAB_BUFFER_SYNC:
+      ppb_dict->Set(dict, type_key, type_buffer_sync);
+      // Outgoing message has no other information.
+      break;
   }
   // Free the ref-counted temporary variable.
   ppb_var->Release(text_var);
@@ -162,22 +172,27 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
     return NULL;
   }
 
-  //  Create a collabedit_T to represent the edit. 
+  //  Create a collabedit_T to represent the edit.
   collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
-  edit->file_buf = curbuf; // TODO(zpotter): Set actual buffer
+  edit->buf_id = ppb_dict->Get(dict, buf_id_key).value.as_int;
+
+  // A PP_Var to Release() at the end of this method.
+  struct PP_Var text_var;
 
   // Parse the specific type of collabedit.
   struct PP_Var var_type = ppb_dict->Get(dict, type_key);
   if (pp_strcmp(var_type, type_append_line) == 0) {
     edit->type = COLLAB_APPEND_LINE;
     edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-    edit->append_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+    text_var = ppb_dict->Get(dict, text_key);
+    edit->append_line.text = (char_u *)var_to_cstr(text_var);
 
   } else if (pp_strcmp(var_type, type_insert_text) == 0) {
     edit->type = COLLAB_INSERT_TEXT;
     edit->insert_text.line = ppb_dict->Get(dict, line_key).value.as_int;
     edit->insert_text.index = ppb_dict->Get(dict, index_key).value.as_int;
-    edit->insert_text.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+    text_var = ppb_dict->Get(dict, text_key);
+    edit->insert_text.text = (char_u *)var_to_cstr(text_var);
 
   } else if (pp_strcmp(var_type, type_remove_line) == 0) {
     edit->type = COLLAB_REMOVE_LINE;
@@ -192,13 +207,32 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
   } else if (pp_strcmp(var_type, type_replace_line) == 0) {
     edit->type = COLLAB_REPLACE_LINE;
     edit->replace_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-    edit->replace_line.text = (char_u *)var_to_cstr(ppb_dict->Get(dict, text_key));
+    text_var = ppb_dict->Get(dict, text_key);
+    edit->replace_line.text = (char_u *)var_to_cstr(text_var);
+
+  } else if (pp_strcmp(var_type, type_buffer_sync) == 0) {
+    edit->type = COLLAB_BUFFER_SYNC;
+    text_var = ppb_dict->Get(dict, text_key);
+    edit->buffer_sync.filename = (char_u *) var_to_cstr(text_var);
+
+    struct PP_Var line_list = ppb_dict->Get(dict, lines_key);
+    edit->buffer_sync.nlines = ppb_array->GetLength(line_list);
+    edit->buffer_sync.lines = malloc(edit->buffer_sync.nlines * sizeof(char_u*));
+
+    for (uint32_t lnum = 0; lnum < edit->buffer_sync.nlines; ++lnum) {
+      struct PP_Var var_line = ppb_array->Get(line_list, lnum);
+      char_u *line = (char_u *) var_to_cstr(var_line);
+      edit->buffer_sync.lines[lnum] = line;
+      ppb_var->Release(var_line);
+    }
+    ppb_var->Release(line_list);
 
   } else {
     // Unknown collabtype_T
     free(edit);
     edit = NULL;
   }
+  ppb_var->Release(text_var);
   return edit;
 }
 
@@ -219,7 +253,7 @@ static void* js_msgloop(void *unused) {
     if (edit != NULL)
       collab_enqueue(&collab_queue, edit);
     PSEventRelease(event);
-  } 
+  }
   // Never reached.
   return NULL;
 }
@@ -244,10 +278,12 @@ int ppb_var_init() {
   // Get the interface variables for manipulating PP_Vars.
   ppb_var = PSInterfaceVar();
   ppb_dict = PSGetInterface(PPB_VAR_DICTIONARY_INTERFACE);
+  ppb_array = PSGetInterface(PPB_VAR_ARRAY_INTERFACE);
   ppb_msg = PSInterfaceMessaging();
   pp_ins = PSGetInstanceId();
   // Check for missing interfaces.
-  if (ppb_var == NULL || ppb_dict == NULL || ppb_msg == NULL) {
+  if (ppb_var == NULL || ppb_dict == NULL ||
+      ppb_msg == NULL || ppb_array == NULL) {
     return 1;
   }
 
@@ -256,12 +292,16 @@ int ppb_var_init() {
   type_insert_text = UTF8_TO_VAR("insert_text");
   type_remove_line = UTF8_TO_VAR("remove_line");
   type_delete_text = UTF8_TO_VAR("delete_text");
+  type_buffer_sync = UTF8_TO_VAR("buffer_sync");
   type_replace_line = UTF8_TO_VAR("replace_line");
   type_key = UTF8_TO_VAR("collabedit_type");
+  buf_id_key = UTF8_TO_VAR("buf_id");
   line_key = UTF8_TO_VAR("line");
   text_key = UTF8_TO_VAR("text");
   index_key = UTF8_TO_VAR("index");
   length_key = UTF8_TO_VAR("length");
+  filename_key = UTF8_TO_VAR("filename");
+  lines_key = UTF8_TO_VAR("lines");
 
   return 0;
 }
@@ -281,8 +321,8 @@ int nacl_main(int argc, char* argv[]) {
   pthread_create(&looper, NULL, &js_msgloop, NULL);
 
   // Tell JS and Realtime that Vim is ready to receive the init file.
-  // TODO(zpotter): send a real message here
-  js_printf("_vimready");
+  collabedit_T sync = { .type = COLLAB_BUFFER_SYNC, .buf_id = 0 };
+  collab_remoteapply(&sync);
 
   // Execute vim's main loop
   return nacl_vim_main(argc, argv);
@@ -295,7 +335,7 @@ int js_printf(const char* format, ...) {
   va_list argp;
 
   va_start(argp, format);
-  printed = vasprintf(&str, format, argp); 
+  printed = vasprintf(&str, format, argp);
   va_end(argp);
   if (printed >= 0) {
     // The JS nacl_term just prints any unexpected message to the JS console.
