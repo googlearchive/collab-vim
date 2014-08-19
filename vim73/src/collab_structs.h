@@ -14,6 +14,7 @@
  * Enumerations for different types of collaborative edits.
  */
 typedef enum {
+  COLLAB_CURSOR_MOVE, /* A user's cursor has moved. */
   COLLAB_APPEND_LINE, /* A new line was added to the document. */
   COLLAB_INSERT_TEXT, /* Text was inserted into an existing line. */
   COLLAB_REMOVE_LINE, /* A line was removed from the document. */
@@ -64,6 +65,12 @@ typedef struct collabedit_S {
       linenr_T nlines;  /* The number of lines in the document. */
       char_u **lines;   /* The initial lines in the document. */
     } buffer_sync;
+
+    struct {            /* Type: COLLAB_CURSOR_MOVE */
+      char_u *user_id;  /* A unique string for each editor's cursor. Must match
+                           regex "[a-zA-Z0-9_]*". */
+      pos_T pos;        /* The position of the cursor in the document. */
+    } cursor_move;
   };
 } collabedit_T;
 

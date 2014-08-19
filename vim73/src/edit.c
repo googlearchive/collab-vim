@@ -1480,6 +1480,8 @@ ins_redraw(ready)
 
     if (!char_avail())
     {
+	/* Notify remote collaborators of a cursor move. */
+	collab_cursorupdate();
 #if defined(FEAT_AUTOCMD) || defined(FEAT_CONCEAL)
 	/* Trigger CursorMoved if the cursor moved.  Not when the popup menu is
 	 * visible, the command might delete it. */

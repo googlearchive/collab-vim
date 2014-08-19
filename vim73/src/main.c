@@ -1096,6 +1096,8 @@ main_loop(cmdwin, noexmode)
 	    skip_redraw = FALSE;
 	else if (do_redraw || stuff_empty())
 	{
+	    /* Notify remote collaborators of a cursor move. */
+	    collab_cursorupdate();
 #if defined(FEAT_AUTOCMD) || defined(FEAT_CONCEAL)
 	    /* Trigger CursorMoved if the cursor moved. */
 	    if (!finish_op && (

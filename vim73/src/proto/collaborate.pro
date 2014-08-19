@@ -11,3 +11,4 @@ void collab_applyedits __ARGS((struct editqueue_S *queue));
 int collab_inchar __ARGS((char_u *buf, int maxlen, struct editqueue_S *queue));
 int collab_pendingedits __ARGS((struct editqueue_S *queue));
 void collab_remoteapply __ARGS((struct collabedit_S *edit));
+void collab_cursorupdate __ARGS((void));

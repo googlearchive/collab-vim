@@ -19,8 +19,8 @@
       }
       #header {
         padding: 0 1em;
-        height: 4em;
-        line-height: 4em;
+        height: 70px;
+        line-height: 70px;
         vertical-align: middle;
         background: #0D0D0D;
         color: #CCCCCC;
@@ -30,13 +30,20 @@
       #terminal {
         width: 99%;
         left: 1%; /* NaClTerm doesn't handle margins well. */
-        top: 4em;
+        top: 70px;
         bottom: 0;
         position: absolute;
       }
       #collaborators {
-        display: inline;
-        background: #e7e7e7;
+        float: right;
+        height: 70px;
+      }
+      #collaborators img {
+        max-height: 50px;
+        width: auto;
+        padding-bottom: 5px;
+        margin-top: 7px;
+        margin-right: 5px;
       }
       #title {
         display: inline;

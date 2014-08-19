@@ -47,6 +47,7 @@ static struct PP_Var type_insert_text;
 static struct PP_Var type_remove_line;
 static struct PP_Var type_delete_text;
 static struct PP_Var type_buffer_sync;
+static struct PP_Var type_cursor_move;
 static struct PP_Var type_replace_line;
 static struct PP_Var type_key;
 static struct PP_Var buf_id_key;
@@ -56,6 +57,8 @@ static struct PP_Var index_key;
 static struct PP_Var length_key;
 static struct PP_Var filename_key;
 static struct PP_Var lines_key;
+static struct PP_Var user_id_key;
+static struct PP_Var column_key;
 
 /*
  * Sets up a nacl_io filesystem for vim's runtime files, such as the vimrc and
@@ -128,6 +131,11 @@ struct PP_Var ppvar_from_collabedit(const collabedit_T *edit) {
   struct PP_Var text_var;
   ppb_dict->Set(dict, buf_id_key, PP_MakeInt32(edit->buf_id));
   switch (edit->type) {
+    case COLLAB_CURSOR_MOVE:
+      ppb_dict->Set(dict, type_key, type_cursor_move);
+      ppb_dict->Set(dict, line_key, PP_MakeInt32(edit->cursor_move.pos.lnum));
+      ppb_dict->Set(dict, column_key, PP_MakeInt32(edit->cursor_move.pos.col));
+      break;
     case COLLAB_APPEND_LINE:
       ppb_dict->Set(dict, type_key, type_append_line);
       ppb_dict->Set(dict, line_key, PP_MakeInt32(edit->append_line.line));
@@ -181,7 +189,17 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
 
   // Parse the specific type of collabedit.
   struct PP_Var var_type = ppb_dict->Get(dict, type_key);
-  if (pp_strcmp(var_type, type_append_line) == 0) {
+  if (pp_strcmp(var_type, type_cursor_move) == 0) {
+    edit->type = COLLAB_CURSOR_MOVE;
+    edit->cursor_move.user_id = var_to_cstr(ppb_dict->Get(dict, user_id_key));
+    int lnum = ppb_dict->Get(dict, line_key).value.as_int;
+    int col = ppb_dict->Get(dict, column_key).value.as_int;
+    edit->cursor_move.pos = (pos_T) {
+        .lnum = lnum,
+        .col = col
+    };
+
+  } else if (pp_strcmp(var_type, type_append_line) == 0) {
     edit->type = COLLAB_APPEND_LINE;
     edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
     edit->append_line.text = var_to_cstr(ppb_dict->Get(dict, text_key));
@@ -286,6 +304,7 @@ int ppb_var_init() {
   type_remove_line = UTF8_TO_VAR("remove_line");
   type_delete_text = UTF8_TO_VAR("delete_text");
   type_buffer_sync = UTF8_TO_VAR("buffer_sync");
+  type_cursor_move = UTF8_TO_VAR("cursor_move");
   type_replace_line = UTF8_TO_VAR("replace_line");
   type_key = UTF8_TO_VAR("collabedit_type");
   buf_id_key = UTF8_TO_VAR("buf_id");
@@ -295,6 +314,8 @@ int ppb_var_init() {
   length_key = UTF8_TO_VAR("length");
   filename_key = UTF8_TO_VAR("filename");
   lines_key = UTF8_TO_VAR("lines");
+  user_id_key = UTF8_TO_VAR("user_id");
+  column_key = UTF8_TO_VAR("column");
 
   return 0;
 }

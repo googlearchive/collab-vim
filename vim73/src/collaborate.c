@@ -79,6 +79,27 @@ int collab_get_id(buf_T *buf) {
   return -1;
 }
 
+/* The last known position of the local user's cursor. */
+static pos_T last_pos;
+
+/*
+ * A simple struct to track highlight groups for user cursors.
+ */
+struct collabcursor_S {
+  /* A unique string for each editor's cursor. Must match regex
+     "[a-zA-Z0-9_]*". */
+  char_u *user_id;
+  /* The highlight match ID as returned by match_add(). */
+  int match_id;
+};
+
+/* An array of remote cursors to highlight. */
+static struct collabcursor_S *cursors = NULL;
+/* The number of remote cursors in 'cursors'. */
+static size_t num_cursors = 0;
+/* The number of cursors able to be held in 'cursors'. */
+static size_t cursor_capacity = 0;
+
 /*
  * Sends a local user edit to remote collaborators.
  * Implementation is specific to collaborative backend.
@@ -149,6 +170,62 @@ static void applyedit(collabedit_T *cedit) {
   int did_setbuf = collab_setbuf(cedit->buf_id);
   // Apply edit depending on type
   switch (cedit->type) {
+    case COLLAB_CURSOR_MOVE:
+    {
+      // Collaborator's cursors are shown by simply highlighting the
+      // background at the remote cursor position.
+      struct collabcursor_S *cursor = NULL;
+      // If user_id has been seen before, clear old match.
+      for (size_t i = 0; i < num_cursors; ++i) {
+        if (STRCMP(cursors[i].user_id, cedit->cursor_move.user_id) == 0) {
+          match_delete(curwin, cursors[i].match_id, FALSE);
+          cursor = &cursors[i];
+          break;
+        }
+      }
+      // If user_id is new, add it to cursor list.
+      if (!cursor) {
+        // Resize 'cursors' if full.
+        if (num_cursors >= cursor_capacity) {
+          cursor_capacity = MAX(2 * cursor_capacity, 4);
+          cursors = realloc(cursors, cursor_capacity * sizeof(struct collabcursor_S));
+        }
+        // Create new cursor.
+        cursors[num_cursors] = (struct collabcursor_S) {
+            .user_id = NULL,
+            .match_id = -1
+        };
+        cursor = &cursors[num_cursors];
+        num_cursors++;
+        cursor->user_id = malloc(STRLEN(cedit->cursor_move.user_id) + 1);
+        STRCPY(cursor->user_id, cedit->cursor_move.user_id);
+        // Here we create the new highlight group for user id. This is
+        // equivalent to running the command ":hi <user_id> ctermbg=<color>".
+        size_t group_len = STRLEN(cursor->user_id);
+        int gid = syn_check_group(cursor->user_id, group_len);
+        // Make hl_args large enough to hold user_id, plus color arguments:
+        char_u hl_args[group_len + 10 + 1]; // strlen(" ctermbg=N") == 10
+        STRCPY(hl_args, cursor->user_id);
+        STRCAT(hl_args, " ctermbg=C");
+        // Replace last char 'C' with a color. The color cycles through
+        // chars '2'-'6'.
+        hl_args[group_len + 9] = '0' + (num_cursors - 1) % 5 + 2;
+        // Add the new highlight group.
+        do_highlight(hl_args, FALSE, FALSE);
+      }
+      // Highlight the cursor position with a call to match. Match the cursor
+      // position as if the following Vim command was called:
+      //   ":match \%<COL>v\%<ROW>l"
+      char_u cursor_pattern[100];
+      sprintf((char *)cursor_pattern, "\\%%%iv\\%%%lil",
+          cedit->cursor_move.pos.col + 1, cedit->cursor_move.pos.lnum);
+      int mid = match_add(curwin, cursor->user_id, cursor_pattern, 0, cursor->match_id);
+      cursor->match_id = mid;
+      // Free up cursor_move strings.
+      free(cedit->cursor_move.user_id);
+      break;
+    }
+
     case COLLAB_APPEND_LINE:
       ml_append_collab(cedit->append_line.line, cedit->append_line.text, 0, FALSE, FALSE);
       // Adjust cursor position: If the cursor is on a line below the newly
@@ -302,7 +379,7 @@ int collab_pendingedits(editqueue_T *queue) {
 /*
  * When called, if there are pending edits to process, this will copy up to
  * "maxlen" characters of a special sequence into "buf". When the sequence is
- * read by vim's user input processor, it will trigger a call to 
+ * read by vim's user input processor, it will trigger a call to
  * collab_applyedits. Seems a little hacky, but it's how vim processes special
  * events. This function should only be called from vim's main thread.
  * Returns the number of characters copied into the buffer.
@@ -334,6 +411,31 @@ int collab_inchar(char_u *buf, int maxlen, editqueue_T *queue) {
 
   // Return number of copied keys
   return nkeys;
+}
+
+/*
+ * Updates last known position of local user's cursor.
+ * If the cursor has moved since the last time this function was called,
+ * the remote collaborators will be updated with the new cursor position.
+ */
+void collab_cursorupdate() {
+  pos_T cur_pos = curwin->w_cursor;
+  if (last_pos.lnum != cur_pos.lnum || last_pos.col != cur_pos.col) {
+    int bid = collab_get_id(curbuf);
+    // If bid < 0, buf is not actually collaborative.
+    if (bid >= 0) {
+      // Send the change to the remote collaborators.
+      collabedit_T cursor_move = {
+        .type = COLLAB_CURSOR_MOVE,
+        .buf_id = bid,
+        .cursor_move.pos = cur_pos
+        // .cursor_move.user_id set in JS-land
+      };
+      collab_remoteapply(&cursor_move);
+    }
+  }
+  // Update last known position.
+  last_pos = cur_pos;
 }
 
 // Declaration in collab_util.h
