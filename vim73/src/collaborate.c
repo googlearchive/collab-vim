@@ -39,38 +39,39 @@ static int num_bufs = 0;
 
 /*
  * Creates a new default buffer to track collabedit_T events for. The new buffer
- * will be referenced by 'bid'. It will be opened with the filename 'fname'.
+ * will be referenced by 'buffer_id'. It is opened with the filename 'fname'.
+ * TODO(zpotter): Add a way to close and reclaim buffer ID's.
  */
-static void collab_addbuf(int bid, char_u *fname) {
-  if (bid >= collab_capacity) {
+void collab_newbuf(int buffer_id, char_u *fname) {
+  if (buffer_id >= collab_capacity) {
     // Grow collab_bufs array.
-    size_t newlen = MAX(2 * collab_capacity, bid + 1);
+    size_t newlen = MAX(2 * collab_capacity, buffer_id + 1);
     collab_bufs = realloc(collab_bufs, newlen);
     collab_capacity = newlen;
-    ++num_bufs;
   }
   // Create and store the new buffer.
-  collab_bufs[bid] = buflist_new(fname, NULL, 1, 0);
+  collab_bufs[buffer_id] = buflist_new(fname, NULL, 1, 0);
+  ++num_bufs;
 }
 
 /*
- * Sets the 'curbuf' global to the collaborative buffer identified by 'bid'.
- * Returns TRUE on a successful switch or FALSE if 'bid' doesn't match a buffer.
+ * Sets the 'curbuf' global to the collab buffer identified by 'buffer_id'.
+ * Returns TRUE on a successful switch or FALSE if ID doesn't match a buffer.
  */
-static int collab_setbuf(int bid) {
-  if (bid >= num_bufs || !collab_bufs[bid])
+int collab_setbuf(int buffer_id) {
+  if (buffer_id >= num_bufs || !collab_bufs[buffer_id])
     return FALSE;
   // Only call set_curbuf if actually switching to a different buffer.
-  if (curbuf != collab_bufs[bid])
-    set_curbuf(collab_bufs[bid], DOBUF_GOTO);
+  if (curbuf != collab_bufs[buffer_id])
+    set_curbuf(collab_bufs[buffer_id], DOBUF_GOTO);
   return TRUE;
 }
 
 /*
- * Returns the buffer id for 'buf' or -1 if 'buf' isn't tracked as a
+ * Returns the buffer ID for 'buf' or -1 if 'buf' isn't tracked as a
  * collaborative buffer.
  */
-int collab_get_bid(buf_T *buf) {
+int collab_get_id(buf_T *buf) {
   for (int bid = 0; bid < num_bufs; ++bid) {
     if (collab_bufs[bid] == buf)
       return bid;
@@ -183,7 +184,7 @@ static void applyedit(collabedit_T *cedit) {
       } else if (curwin->w_cursor.lnum == cedit->remove_line.line) {
         // If cursor is on the deleted line...
         if (curwin->w_cursor.lnum > curbuf->b_ml.ml_line_count) {
-          // If cursor is passed the last line, move it to the end of the
+          // If cursor is past the last line, move it to the end of the
           // last line.
           curwin->w_cursor.lnum = curbuf->b_ml.ml_line_count;
           curwin->w_cursor.col = STRLEN(ml_get(curwin->w_cursor.lnum)) - 1;
@@ -222,7 +223,7 @@ static void applyedit(collabedit_T *cedit) {
     {
       if (!did_setbuf) {
         // Create a new collaborative buffer.
-        collab_addbuf(cedit->buf_id, cedit->buffer_sync.filename);
+        collab_newbuf(cedit->buf_id, cedit->buffer_sync.filename);
         did_setbuf = collab_setbuf(cedit->buf_id);
       } else {
         // Update local file name.

@@ -14,9 +14,12 @@ NaClTerm.nmf = 'vim.nmf'
  * inserted or deleted from a line, the index of the line in the document is
  * unknown. To avoid frequent O(n) searches for line numbers, this cache can be
  * used to track shifting of a set of lines.
+ * Note that there is no way to remove a line from the cache if it is deleted
+ * from the document. It will eventually be evicted as the oldest elements are
+ * removed from the cache.
  * @param {gapi.drive.realtime.CollaborativeList} src The list containing the
  *    lines.
- * @param {number} opt_capacity The maximum size of the LRU cache. If 0 or not
+ * @param {number} opt_capacity The maximum size of the cache. If 0 or not
  *    provided, uses a default cache size.
  */
 function IndexCache(src, opt_capacity) {
@@ -26,8 +29,8 @@ function IndexCache(src, opt_capacity) {
     this.indices = {};
     var capacity = opt_capacity || 50;
     // A circular queue of line ID's:
-    this.lru = new Array(capacity);
-    // The index of the oldest line in 'lru':
+    this.cache = new Array(capacity);
+    // The index of the oldest line in 'cache':
     this.oldest = 0;
 }
 
@@ -46,6 +49,8 @@ IndexCache.prototype.indexOf = function(line) {
     // Add to cache if line is in source.
     if (index >= 0)
       this.insert(line, index);
+    else
+      return undefined;
   }
   // Get cached index.
   return this.indices[line.id];
@@ -58,14 +63,14 @@ IndexCache.prototype.indexOf = function(line) {
  */
 IndexCache.prototype.insert = function(line, index) {
   // Remove oldest element from cache.
-  var oldestElem = this.lru[this.oldest];
+  var oldestElem = this.cache[this.oldest];
   delete this.indices[oldestElem];
   // Add new element to cache.
-  this.lru[this.oldest] = line.id;
+  this.cache[this.oldest] = line.id;
   this.indices[line.id] = index;
   // Advance oldest pointer.
   this.oldest++;
-  if (this.oldest >= this.lru.length)
+  if (this.oldest >= this.cache.length)
     this.oldest = 0;
 }
 
@@ -129,7 +134,9 @@ rtvim.realtimeLoader = null;
 rtvim.doc = null;
 
 /**
- * A flag indicating if Vim needs a file sync message.
+ * A flag indicating if Vim needs a file sync message. It is not certain whether
+ * the Realtime document or Vim will be ready to send/receive data first. See
+ * where this variable is set for further explanation.
  * @type {boolean}
  */
 rtvim.needSync = false;
@@ -139,7 +146,8 @@ rtvim.needSync = false;
  */
 rtvim.createInDrive = function() {
   var filename = prompt('Enter a new filename', rtvim.rtOptions.defaultTitle);
-  if (!filename) return;
+  if (!filename)
+    return;
   rtclient.createRealtimeFile(filename, rtvim.rtOptions.newFileMimeType,
       rtvim.openFromDrive);
 }
@@ -159,9 +167,7 @@ rtvim.openFromDrive = function(opt_file) {
         .setAppId(rtvim.rtOptions.appId)
         .setOAuthToken(token)
         .addView(view)
-        //.addView(new google.picker.DocsUploadView())
         .setCallback(function(data) {
-            console.log(data);
             if (data.action == google.picker.Action.PICKED)
               rtvim.openFromDrive(data.docs[0]);
           })
@@ -191,14 +197,13 @@ rtvim.shareDocument = function () {
 /**
  * Handles incoming messages from NaCl. The 'this' variable refers to the
  * Realtime document.
- * @param {object} e A NaCl message.
+ * @param {object} msg A NaCl message.
  * @return {boolean} True if the message was consumed, otherwise false.
  */
-rtvim.applyLocalEdit = function(e) {
+rtvim.applyLocalEdit = function(msg) {
   // Skip anything that doesn't look like a collabedit message.
-  if (!e.data || !e.data[TYPE_KEY]) return false;
-  console.log('HANDLE MESSAGE', e.data);
-  var collabedit = e.data;
+  if (!msg.data || !msg.data[TYPE_KEY]) return false;
+  var collabedit = msg.data;
   if (collabedit[TYPE_KEY] == TYPE_BUFFER_SYNC) {
     // Only sync if the Realtime Document has been loaded. If Realtime
     // isn't yet ready, it will sync once the file loads.
@@ -236,8 +241,7 @@ rtvim.applyLocalEdit = function(e) {
     rtLines.get(collabedit[LINE_KEY] - 1).removeRange(start, end);
 
   } else {
-    console.log('Unrecognized collabedit type from Vim: ' +
-        collabedit[TYPE_KEY]);
+    console.log('Unrecognized collabedit type from Vim: ' + collabedit[TYPE_KEY]);
   }
   return true;
 }
@@ -268,7 +272,6 @@ rtvim.initializeModel = function(model) {
  * @param doc {gapi.drive.realtime.Document} the Realtime document.
  */
 rtvim.onFileLoaded = function(doc) {
-  console.log('Realtime File Loaded:');
   rtvim.doc = doc;
   // Enable the share button
   document.getElementById('shareButton').disabled = false;
@@ -276,21 +279,22 @@ rtvim.onFileLoaded = function(doc) {
   var lines = doc.getModel().getRoot().get('vimlines');
   lines.addEventListener(gapi.drive.realtime.EventType.VALUES_ADDED, rtvim.onLineAdded);
   lines.addEventListener(gapi.drive.realtime.EventType.VALUES_REMOVED, rtvim.onLineRemoved);
-  // Make sure there is at least one line in the doc
+  // Make sure there is at least one line in the doc. In Vim, an empty file has
+  // one empty line.
   if (lines.length == 0) {
-    doc.getModel().getRoot().get('vimlines').push(doc.getModel().createString(''));  
+    doc.getModel().getRoot().get('vimlines').push(doc.getModel().createString(''));
   }
   for (var i = 0; i < lines.length; i++) {
     var line = lines.get(i);
-    console.log((i+1)+': '+line.toString());
     line.addEventListener(gapi.drive.realtime.EventType.TEXT_INSERTED,
       rtvim.onTextInserted.bind(line));
     line.addEventListener(gapi.drive.realtime.EventType.TEXT_DELETED,
       rtvim.onTextDeleted.bind(line));
   }
-  // Set up LRU cache for line numbers
+  // Set up cache for line numbers
   rtvim.lcache = new IndexCache(lines);
-  if (rtvim.needSync) rtvim.syncModel(doc);
+  if (rtvim.needSync)
+    rtvim.syncModel(doc);
 }
 
 /**
@@ -298,7 +302,7 @@ rtvim.onFileLoaded = function(doc) {
  * @param {object} msg The message to send to native code.
  */
 rtvim.postMessage = function(msg) {
-  console.log('POST MESSAGE', msg);
+  // 'foreground_process' is the Vim NaCl module as created in NaClTerm.
   foreground_process.postMessage(msg);
 }
 
@@ -327,11 +331,14 @@ rtvim.syncModel = function(rtdoc) {
  * @param {gapi.drive.realtime.ValuesAddedEvent} ev The Realtime to send.
  */
 rtvim.onLineAdded = function(ev) {
-  // Ignore local events caused by our own edits
-  if (ev.isLocal) return;
   // This event may contain more than 1 added line
   var lines = ev.values;
   var lnum = ev.index;
+  // Update the indices of cached lines
+  rtvim.lcache.shiftFrom(lnum, lines.length);
+  // Don't send events to Vim that are caused by its own edits
+  if (ev.isLocal)
+    return;
   // Construct collabedit messages to pass to Vim
   for (var i = 0; i < lines.length; i++) {
     // Add event listeners to the new line's CollaborativeString
@@ -348,8 +355,6 @@ rtvim.onLineAdded = function(ev) {
     // Let Vim know about the update
     rtvim.postMessage(collabedit);
   }
-  // Update the indices of cached lines.
-  rtvim.lcache.shiftFrom(lnum, lines.length);
 }
 
 /**
@@ -357,10 +362,13 @@ rtvim.onLineAdded = function(ev) {
  * @param {gapi.drive.realtime.ValuesRemovedEvent} ev The Realtime to send.
  */
 rtvim.onLineRemoved = function(ev) {
-  // Ignore local events caused by our own edits
-  if (ev.isLocal) return;
   // This event may contain more than 1 removed line
   var lnum = ev.index;
+  // Update the indices of cached lines
+  rtvim.lcache.shiftFrom(lnum, -ev.values.length);
+  // Don't send events to Vim that are caused by its own edits
+  if (ev.isLocal)
+    return;
   // Construct collabedit messages to pass to Vim
   for (var i = 0; i < ev.values.length; i++) {
     var collabedit = {};
@@ -370,8 +378,6 @@ rtvim.onLineRemoved = function(ev) {
     // Let Vim know about the update
     rtvim.postMessage(collabedit);
   }
-  // Update the indices of cached lines.
-  rtvim.lcache.shiftFrom(lnum, -ev.values.length);
 }
 
 /**
@@ -381,7 +387,8 @@ rtvim.onLineRemoved = function(ev) {
  */
 rtvim.onTextInserted = function(ev) {
   // Ignore local events caused by our own edits
-  if (ev.isLocal) return;
+  if (ev.isLocal)
+    return;
   var lnum = rtvim.lcache.indexOf(this);
   // Construct collabedit messages to pass to Vim
   var collabedit = {};
@@ -401,7 +408,8 @@ rtvim.onTextInserted = function(ev) {
  */
 rtvim.onTextDeleted = function(ev) {
   // Ignore local events caused by our own edits
-  if (ev.isLocal) return;
+  if (ev.isLocal)
+    return;
   var lnum = rtvim.lcache.indexOf(this);
   // Construct collabedit messages to pass to Vim
   var collabedit = {};
@@ -474,11 +482,10 @@ rtvim.startRealtime = function() {
   rtvim.realtimeLoader.start();
 }
 
-// NaClTerm sets its own onload. Call it later as part of initialization.
-var oldOnload = window.onload;
-window.onload = function() {
+document.addEventListener('DOMContentLoaded', function(event) {
   // Set up a NaCl message handler that intercepts messages before they reach
-  // NaClTerm (which can't handle unexpected messages).
+  // NaClTerm (which can't handle unexpected messages that aren't strings).
+  // TODO(zpotter): Solve the problem in NaClTerm instead.
   var termHandleMessage = NaClTerm.prototype.handleMessage_;
   NaClTerm.prototype.handleMessage_= function(e) {
     // Attempt processing the message as a collaborative edit.
@@ -487,8 +494,6 @@ window.onload = function() {
     if (!processed) termHandleMessage.apply(this, arguments);
   };
 
-  // Call NaClTerm's onload function.
-  if (oldOnload) oldOnload();
   // Start realtime.
   rtvim.startRealtime();
 
@@ -500,4 +505,4 @@ window.onload = function() {
       .addEventListener('click', function() { rtvim.openFromDrive(); });
   document.getElementById('shareButton')
       .addEventListener('click', rtvim.shareDocument);
-}
+});

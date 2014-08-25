@@ -92,15 +92,18 @@ static int setup_unix_environment(const char* tarfile) {
 
 /*
  * Returns a null-terminated C string converted from a string PP_Var.
+ * This function assumes 'str_var' is no longer needed after this call, so
+ * releases it.
  */
-static char* var_to_cstr(struct PP_Var str_var) {
+static char_u* var_to_cstr(struct PP_Var str_var) {
   const char *vstr;
   uint32_t var_len;
   vstr = ppb_var->VarToUtf8(str_var, &var_len);
   char *cstr = malloc(var_len + 1); // +1 for null char
   strncpy(cstr, vstr, var_len);
   cstr[var_len] = '\0'; // Null terminate the string
-  return cstr;
+  ppb_var->Release(str_var);
+  return (char_u *)cstr;
 }
 
 /*
@@ -176,23 +179,18 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
   collabedit_T *edit = (collabedit_T *) malloc(sizeof(collabedit_T));
   edit->buf_id = ppb_dict->Get(dict, buf_id_key).value.as_int;
 
-  // A PP_Var to Release() at the end of this method.
-  struct PP_Var text_var;
-
   // Parse the specific type of collabedit.
   struct PP_Var var_type = ppb_dict->Get(dict, type_key);
   if (pp_strcmp(var_type, type_append_line) == 0) {
     edit->type = COLLAB_APPEND_LINE;
     edit->append_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-    text_var = ppb_dict->Get(dict, text_key);
-    edit->append_line.text = (char_u *)var_to_cstr(text_var);
+    edit->append_line.text = var_to_cstr(ppb_dict->Get(dict, text_key));
 
   } else if (pp_strcmp(var_type, type_insert_text) == 0) {
     edit->type = COLLAB_INSERT_TEXT;
     edit->insert_text.line = ppb_dict->Get(dict, line_key).value.as_int;
     edit->insert_text.index = ppb_dict->Get(dict, index_key).value.as_int;
-    text_var = ppb_dict->Get(dict, text_key);
-    edit->insert_text.text = (char_u *)var_to_cstr(text_var);
+    edit->insert_text.text = var_to_cstr(ppb_dict->Get(dict, text_key));
 
   } else if (pp_strcmp(var_type, type_remove_line) == 0) {
     edit->type = COLLAB_REMOVE_LINE;
@@ -207,23 +205,19 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
   } else if (pp_strcmp(var_type, type_replace_line) == 0) {
     edit->type = COLLAB_REPLACE_LINE;
     edit->replace_line.line = ppb_dict->Get(dict, line_key).value.as_int;
-    text_var = ppb_dict->Get(dict, text_key);
-    edit->replace_line.text = (char_u *)var_to_cstr(text_var);
+    edit->replace_line.text = var_to_cstr(ppb_dict->Get(dict, text_key));
 
   } else if (pp_strcmp(var_type, type_buffer_sync) == 0) {
     edit->type = COLLAB_BUFFER_SYNC;
-    text_var = ppb_dict->Get(dict, text_key);
-    edit->buffer_sync.filename = (char_u *) var_to_cstr(text_var);
+    edit->buffer_sync.filename = var_to_cstr(ppb_dict->Get(dict, text_key));
 
     struct PP_Var line_list = ppb_dict->Get(dict, lines_key);
     edit->buffer_sync.nlines = ppb_array->GetLength(line_list);
-    edit->buffer_sync.lines = malloc(edit->buffer_sync.nlines * sizeof(char_u*));
+    edit->buffer_sync.lines = calloc(edit->buffer_sync.nlines, sizeof(char_u*));
 
     for (uint32_t lnum = 0; lnum < edit->buffer_sync.nlines; ++lnum) {
-      struct PP_Var var_line = ppb_array->Get(line_list, lnum);
-      char_u *line = (char_u *) var_to_cstr(var_line);
+      char_u *line = var_to_cstr(ppb_array->Get(line_list, lnum));
       edit->buffer_sync.lines[lnum] = line;
-      ppb_var->Release(var_line);
     }
     ppb_var->Release(line_list);
 
@@ -232,7 +226,6 @@ collabedit_T * collabedit_from_ppvar(struct PP_Var dict) {
     free(edit);
     edit = NULL;
   }
-  ppb_var->Release(text_var);
   return edit;
 }
 

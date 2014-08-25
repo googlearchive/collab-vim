@@ -3085,7 +3085,7 @@ ml_append_int(buf, lnum, line, len, newfile, mark, fire_event)
     }
 #endif
     if (fire_event) {
-        int bid = collab_get_bid(buf);
+        int bid = collab_get_id(buf);
         /* If bid < 0, buf is not actually collaborative. */
         if (bid >= 0) {
             /* Send the local edit to the remote collaborators. */
@@ -3161,7 +3161,7 @@ ml_replace_collab(lnum, line, copy, fire_event)
     curbuf->b_ml.ml_flags = (curbuf->b_ml.ml_flags | ML_LINE_DIRTY) & ~ML_EMPTY;
 
     if (fire_event) {
-        int bid = collab_get_bid(curbuf);
+        int bid = collab_get_id(curbuf);
         /* If bid < 0, buf is not actually collaborative. */
         if (bid >= 0) {
             /* Send the local edit to the remote collaborators. */
@@ -3368,7 +3368,7 @@ ml_delete_int(buf, lnum, message, fire_event)
     ml_updatechunk(buf, lnum, line_size, ML_CHNK_DELLINE);
 #endif
     if (fire_event) {
-        int bid = collab_get_bid(buf);
+        int bid = collab_get_id(buf);
         /* If bid < 0, buf is not actually collaborative. */
         if (bid >= 0) {
             /* Send the local edit to the remote collaborators. */
