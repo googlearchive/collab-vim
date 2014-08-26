@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Vim</title>
+    <!-- Load the PNaCL module. -->
+    <script type="text/javascript" src="hterm.concat.js"></script>
+    <script type="text/javascript" src="naclterm.js"></script>
+    <!-- Load the Realtime libraries. -->
+    <script type="text/javascript" src="https://apis.google.com/js/api.js"></script>
+    <script type="text/javascript" src="realtime-client-utils.js"></script>
+    <script type="text/javascript" src="vim_realtime.js"></script>
+
+    <style type="text/css">
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Sans-serif;
+        background: #000000;
+      }
+      #header {
+        padding: 0 1em;
+        height: 4em;
+        line-height: 4em;
+        vertical-align: middle;
+        background: #0D0D0D;
+        color: #CCCCCC;
+        box-sizing: border-box;
+        border-bottom: 1px solid #4A4A4A;
+      }
+      #terminal {
+        width: 99%;
+        left: 1%; /* NaClTerm doesn't handle margins well. */
+        top: 4em;
+        bottom: 0;
+        position: absolute;
+      }
+      #collaborators {
+        display: inline;
+        background: #e7e7e7;
+      }
+      #title {
+        display: inline;
+        margin-right: 1em;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="header">
+      <h1 id="title">Vim</h1>
+      <button id="authorizeButton" disabled>Authorize with Drive</button>
+      <button id="createButton" disabled>Create</button>
+      <button id="openButton" disabled>Open</button>
+      <button id="shareButton" disabled>Share</button>
+      <div id="collaborators"></div>
+    </div>
+    <div id="terminal"></div>
+  </body>
+</html>
