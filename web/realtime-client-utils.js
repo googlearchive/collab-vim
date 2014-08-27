@@ -302,7 +302,7 @@ rtclient.RealtimeLoader.prototype.redirectTo = function(fileIds, userId) {
   // We are still here that means the page didn't reload.
   rtclient.params = rtclient.getParams();
   for (var index in fileIds) {
-    gapi.drive.realtime.load(fileIds[index], this.onFileLoaded, this.initializeModel, this.handleErrors);
+    gapi.drive.realtime.load(fileIds[index], this.onFileLoaded, this.initializeModel, this.handleErrors.bind(this));
   }
 }
 
@@ -330,7 +330,7 @@ rtclient.RealtimeLoader.prototype.start = function() {
  */
 rtclient.RealtimeLoader.prototype.handleErrors = function(e) {
   if(e.type == gapi.drive.realtime.ErrorType.TOKEN_REFRESH_REQUIRED) {
-    authorizer.authorize();
+    this.authorizer.authorize();
   } else if(e.type == gapi.drive.realtime.ErrorType.CLIENT_ERROR) {
     alert("An Error happened: " + e.message);
     window.location.href= "/";
@@ -360,7 +360,7 @@ rtclient.RealtimeLoader.prototype.load = function() {
   // We have file IDs in the query parameters, so we will use them to load a file.
   if (fileIds) {
     for (var index in fileIds) {
-      gapi.drive.realtime.load(fileIds[index], this.onFileLoaded, this.initializeModel, this.handleErrors);
+      gapi.drive.realtime.load(fileIds[index], this.onFileLoaded, this.initializeModel, this.handleErrors.bind(this));
     }
     return;
   }

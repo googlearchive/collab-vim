@@ -2129,7 +2129,7 @@ ins_str_collab(pos, s, fire_event)
     mch_memmove(newp + col, s, (size_t)newlen);
     mch_memmove(newp + col + newlen, oldp + col, (size_t)(oldlen - col + 1));
     ml_replace_collab(lnum, newp, FALSE, fire_event);
-    changed_bytes(lnum, col);
+    changed_lines(pos.lnum, pos.col, pos.lnum + 1, 0);
 }
 
 /*
@@ -2318,7 +2318,7 @@ del_bytes_collab(pos, count, fire_event)
     ml_replace_collab(pos.lnum, newp, FALSE, fire_event);
 
     /* mark the buffer as changed and prepare for displaying */
-    changed_bytes(pos.lnum, pos.col);
+    changed_lines(pos.lnum, pos.col, pos.lnum + 1, 0);
 
     return OK;
 }

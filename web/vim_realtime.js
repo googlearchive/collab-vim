@@ -105,15 +105,18 @@ var TYPE_INSERT_TEXT = 'insert_text';
 var TYPE_REMOVE_LINE = 'remove_line';
 var TYPE_DELETE_TEXT = 'delete_text';
 var TYPE_BUFFER_SYNC = 'buffer_sync';
+var TYPE_CURSOR_MOVE = 'cursor_move';
 var TYPE_REPLACE_LINE = 'replace_line';
 var TYPE_KEY = 'collabedit_type';
 var BUF_ID_KEY = 'buf_id';
 var LINE_KEY = 'line';
+var COLUMN_KEY = 'column';
 var TEXT_KEY = 'text';
 var INDEX_KEY = 'index';
 var LENGTH_KEY = 'length';
 var FILENAME_KEY = 'filename';
 var LINES_KEY = 'lines';
+var USER_ID_KEY = 'user_id';
 
 /**
  * The index cache for tracking recently used lines.
@@ -216,7 +219,20 @@ rtvim.applyLocalEdit = function(msg) {
   var rtLines = this.getModel().getRoot().get('vimlines');
   // Modify the realtime model on behalf of the vim user.
   // Remember, collabedit line numbers start at 1, NOT 0!
-  if (collabedit[TYPE_KEY] == TYPE_REPLACE_LINE) {
+  if (collabedit[TYPE_KEY] == TYPE_CURSOR_MOVE) {
+    // Update local user's cursor position for collaborators.
+    var cursors = this.getModel().getRoot().get('cursors');
+    var userId = '';
+    // Find local user's user ID.
+    for (var i = 0; i < this.getCollaborators().length; i++) {
+      if (this.getCollaborators()[i].isMe) {
+        userId = this.getCollaborators()[i].userId;
+        break;
+      }
+    }
+    cursors.set(userId, (collabedit[LINE_KEY].toString()+','+collabedit[COLUMN_KEY]));
+
+  } else if (collabedit[TYPE_KEY] == TYPE_REPLACE_LINE) {
     rtLines.get(collabedit[LINE_KEY] - 1).setText(collabedit[TEXT_KEY]);
 
   } else if (collabedit[TYPE_KEY] == TYPE_APPEND_LINE) {
@@ -265,6 +281,7 @@ rtvim.initializeModel = function(model) {
   lines.push(model.createString('Hello Realtime World!'));
   lines.push(model.createString('Welcome to Vim!'));
   model.getRoot().set('vimlines', lines);
+  model.getRoot().set('cursors', model.createMap());
 }
 
 /**
@@ -279,6 +296,8 @@ rtvim.onFileLoaded = function(doc) {
   var lines = doc.getModel().getRoot().get('vimlines');
   lines.addEventListener(gapi.drive.realtime.EventType.VALUES_ADDED, rtvim.onLineAdded);
   lines.addEventListener(gapi.drive.realtime.EventType.VALUES_REMOVED, rtvim.onLineRemoved);
+  var cursors = doc.getModel().getRoot().get('cursors');
+  cursors.addEventListener(gapi.drive.realtime.EventType.VALUE_CHANGED, rtvim.onCursorChanged);
   // Make sure there is at least one line in the doc. In Vim, an empty file has
   // one empty line.
   if (lines.length == 0) {
@@ -295,6 +314,29 @@ rtvim.onFileLoaded = function(doc) {
   rtvim.lcache = new IndexCache(lines);
   if (rtvim.needSync)
     rtvim.syncModel(doc);
+  // Set up UI listeners
+  doc.addEventListener(gapi.drive.realtime.EventType.COLLABORATOR_JOINED, rtvim.updateUi);
+  doc.addEventListener(gapi.drive.realtime.EventType.COLLABORATOR_LEFT, rtvim.updateUi);
+}
+
+/**
+ * Updates icons for all connected collaborators.
+ */
+rtvim.updateUi = function() {
+  var collaborators = rtvim.doc.getCollaborators();
+  var collabDiv = document.getElementById('collaborators');
+  // Clear existing display images.
+  collabDiv.innerHTML = '';
+  // Add a display image for each collaborator.
+  for (var i = 0; i < collaborators.length; ++i) {
+    var collaborator = collaborators[i];
+    var img = new Image();
+    img.src = collaborator.photoUrl || 'anon.jpeg';
+    img.alt = collaborator.displayName;
+    img.title = collaborator.displayName + (collaborator.isMe ? ' (Me)' : '');
+    img.style.backgroundColor = collaborator.color;
+    collabDiv.appendChild(img);
+  }
 }
 
 /**
@@ -314,7 +356,7 @@ rtvim.syncModel = function(rtdoc) {
   var collabedit = {};
   collabedit[TYPE_KEY] = TYPE_BUFFER_SYNC;
   collabedit[BUF_ID_KEY] = 0;
-  collabedit[FILENAME_KEY] = "Collaborative File";
+  collabedit[FILENAME_KEY] = 'Collaborative File';
 
   var doc_lines = rtdoc.getModel().getRoot().get('vimlines');
   var lines = new Array(doc_lines.length);
@@ -324,6 +366,25 @@ rtvim.syncModel = function(rtdoc) {
   collabedit[LINES_KEY] = lines;
   rtvim.postMessage(collabedit);
   rtvim.needSync = false;
+}
+
+/**
+ * Sends an updated collaborator cursor position to Vim.
+ * @param {gapi.drive.realtime.ValueChangedEvent} ev The event setting the new
+ *   cursor position.
+ */
+rtvim.onCursorChanged = function(ev) {
+  if (ev.isLocal)
+    return;
+  var collabedit = {};
+  collabedit[TYPE_KEY] = TYPE_CURSOR_MOVE;
+  collabedit[BUF_ID_KEY] = 0;
+  collabedit[USER_ID_KEY] = ev.property;
+  var pos = ev.newValue.split(',');
+  collabedit[LINE_KEY] = parseInt(pos[0]);
+  collabedit[COLUMN_KEY] = parseInt(pos[1]);
+
+  rtvim.postMessage(collabedit);
 }
 
 /**
