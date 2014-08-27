@@ -68,7 +68,8 @@ typedef struct collabedit_S {
 
     struct {            /* Type: COLLAB_CURSOR_MOVE */
       char_u *user_id;  /* A unique string for each editor's cursor. Must match
-                           regex "[a-zA-Z0-9_]*". */
+                           regex "[a-zA-Z0-9_]*".
+                           TODO(zpotter): Ensure JS only sends valid ID's. */
       pos_T pos;        /* The position of the cursor in the document. */
     } cursor_move;
   };

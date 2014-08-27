@@ -172,8 +172,13 @@ static void applyedit(collabedit_T *cedit) {
   switch (cedit->type) {
     case COLLAB_CURSOR_MOVE:
     {
-      // Collaborator's cursors are shown by simply highlighting the
-      // background at the remote cursor position.
+      // Collaborators' cursor positions are updated and shown here. This is
+      // done with a bit of hackage, but will do for now. We show remote cursors
+      // by highlighting the backgrounds of cursor positions. Vim's codebase
+      // doesn't expose an easy way to do this, so we execute highlight commands
+      // as if the user was executing them in command mode.
+      // TODO(zpotter): Implement remote cursor positions with JS and HTML in
+      // classic Docs style.
       struct collabcursor_S *cursor = NULL;
       // If user_id has been seen before, clear old match.
       for (size_t i = 0; i < num_cursors; ++i) {
@@ -202,7 +207,7 @@ static void applyedit(collabedit_T *cedit) {
         // Here we create the new highlight group for user id. This is
         // equivalent to running the command ":hi <user_id> ctermbg=<color>".
         size_t group_len = STRLEN(cursor->user_id);
-        int gid = syn_check_group(cursor->user_id, group_len);
+        syn_check_group(cursor->user_id, group_len);
         // Make hl_args large enough to hold user_id, plus color arguments:
         char_u hl_args[group_len + 10 + 1]; // strlen(" ctermbg=N") == 10
         STRCPY(hl_args, cursor->user_id);

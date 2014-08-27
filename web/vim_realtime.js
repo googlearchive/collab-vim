@@ -333,7 +333,7 @@ rtvim.updateUi = function() {
     var img = new Image();
     img.src = collaborator.photoUrl || 'anon.jpeg';
     img.alt = collaborator.displayName;
-    img.title = collaborator.displayName + (collaborator.isMe ? " (Me)" : "");
+    img.title = collaborator.displayName + (collaborator.isMe ? ' (Me)' : '');
     img.style.backgroundColor = collaborator.color;
     collabDiv.appendChild(img);
   }
@@ -356,7 +356,7 @@ rtvim.syncModel = function(rtdoc) {
   var collabedit = {};
   collabedit[TYPE_KEY] = TYPE_BUFFER_SYNC;
   collabedit[BUF_ID_KEY] = 0;
-  collabedit[FILENAME_KEY] = "Collaborative File";
+  collabedit[FILENAME_KEY] = 'Collaborative File';
 
   var doc_lines = rtdoc.getModel().getRoot().get('vimlines');
   var lines = new Array(doc_lines.length);
